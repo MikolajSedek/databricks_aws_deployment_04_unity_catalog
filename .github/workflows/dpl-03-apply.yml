@@ -1,0 +1,118 @@
+name: Terraform Apply
+
+on:
+  workflow_call:
+    inputs:
+      working_directory:
+        description: 'Terraform working directory'
+        type: string
+        required: false
+        default: 'environments/dev'
+      environment:
+        description: 'Target environment name'
+        type: string
+        required: false
+        default: 'dev'
+      terraform_version:
+        description: 'Terraform version'
+        type: string
+        required: false
+        default: '1.16.3'
+      aws_region:
+        description: 'AWS region'
+        type: string
+        required: false
+        default: 'eu-central-1'
+      aws_profile:
+        description: 'AWS profile name'
+        type: string
+        required: false
+        default: 'production-admin'
+      plan_artifact_name:
+        description: 'Terraform plan artifact name'
+        type: string
+        required: false
+        default: 'dev-tfplan'
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+
+jobs:
+  apply:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
+    env:
+      TF_VERSION: ${{ inputs.terraform_version }}
+      AWS_REGION: ${{ secrets.AWS_REGION || inputs.aws_region }}
+      AWS_PROFILE: ${{ inputs.aws_profile }}
+      AWS_SDK_LOAD_CONFIG: '1'
+      TF_WORKING_DIR: ${{ inputs.working_directory }}
+      # Terraform variables - AWS & environment
+      TF_VAR_aws_region: ${{ secrets.AWS_REGION || inputs.aws_region }}
+      TF_VAR_aws_account_id: ${{ secrets.AWS_ACCOUNT_ID }}
+      TF_VAR_environment: ${{ inputs.environment }}
+      TF_VAR_profile: ${{ inputs.aws_profile }}
+      # Terraform variables - Databricks MWS & Unity Catalog governance authentication
+      TF_VAR_databricks_account_id: ${{ secrets.DATABRICKS_ACCOUNT_ID }}
+      TF_VAR_service_principal_id: ${{ secrets.DATABRICKS_CLIENT_ID || secrets.DATABRICKS_SERVICE_PRINCIPAL_ID }}
+      TF_VAR_service_principal_secret: ${{ secrets.DATABRICKS_CLIENT_SECRET || secrets.DATABRICKS_SERVICE_PRINCIPAL_SECRET }}
+      # Databricks provider environment variables
+      DATABRICKS_HOST: 'https://accounts.cloud.databricks.com'
+      DATABRICKS_ACCOUNT_ID: ${{ secrets.DATABRICKS_ACCOUNT_ID }}
+      DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID || secrets.DATABRICKS_SERVICE_PRINCIPAL_ID }}
+      DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET || secrets.DATABRICKS_SERVICE_PRINCIPAL_SECRET }}
+      SKIP: 'terraform_docs'
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      # Setup Terraform using official HashiCorp GitHub plugin
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      # Configure AWS Credentials and write shared profile via action
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+          aws-profile: ${{ env.AWS_PROFILE }}
+          overwrite-aws-profile: true
+          role-to-assume: ${{ secrets.AWS_PROFILE_ROLE_ARN }}
+          role-skip-session-tagging: true
+
+      # Restore cached Terraform plugins (.terraform directory)
+      - name: Restore Terraform Providers Cache
+        uses: actions/cache@v6
+        with:
+          path: ${{ env.TF_WORKING_DIR }}/.terraform
+          key: terraform-${{ runner.os }}-${{ hashFiles(format('{0}/.terraform.lock.hcl', env.TF_WORKING_DIR)) }}
+
+      - name: Terraform Init
+        run: terraform init
+
+      # Download the cached plan file
+      - name: Download Cached Terraform Plan
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.plan_artifact_name }}
+          path: ${{ env.TF_WORKING_DIR }}
+
+      - name: Terraform Apply
+        run: terraform apply -input=false -no-color tfplan
+
+      - name: Add Apply Summary to Job Summary
+        run: |
+          echo "### Terraform Apply Completed Successfully (\`${{ inputs.environment }}\`)" >> $GITHUB_STEP_SUMMARY
+          echo "Unity Catalog metastore, workspace assignments, catalogs, workspace bindings, schemas, volumes, UC secrets, and Open Delta Sharing resources have been provisioned." >> $GITHUB_STEP_SUMMARY
