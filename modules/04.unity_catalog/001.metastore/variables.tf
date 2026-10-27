@@ -63,6 +63,12 @@ variable "owner_group_name" {
   type        = string
 }
 
+variable "owner" {
+  description = "Explicit owner of the Unity Catalog metastore (defaults to owner_group_name)."
+  type        = string
+  default     = null
+}
+
 variable "delta_sharing_scope" {
   description = "Delta Sharing scope on the metastore (INTERNAL or INTERNAL_AND_EXTERNAL)."
   type        = string

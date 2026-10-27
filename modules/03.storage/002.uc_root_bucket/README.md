@@ -13,7 +13,7 @@
 - **Problem Statement & Solution**:
   Databricks Unity Catalog requires dedicated S3 object storage encrypted with Customer-Managed KMS Keys (SSE-KMS) and strict public access blocking, but—unlike Terraform state buckets—Databricks explicitly recommends **disabling S3 object versioning** on Unity Catalog buckets because Delta Lake and Unity Catalog natively manage table/volume transaction logs and `VACUUM` retention. Enabling S3 versioning on UC buckets leads to uncollected orphaned objects and inflated storage bills. This module codifies that exact posture while enforcing `BucketOwnerEnforced`, SSE-KMS with S3 Bucket Keys, `prevent_destroy = true`, and a 7-day incomplete multipart upload abort rule.
 - **Key Business & Security Outcomes**:
-  - **Shared Root Bucket Prefix Isolation**: Enables all catalogs (`data_engineering_dev`, `data_science_dev`, `business_analytics_dev`, `shared_enterprise_dev`) to use isolated `s3://<bucket>/catalogs/<domain>` prefixes inside a single governed UC root bucket without proliferating separate S3 buckets per catalog.
+  - **Shared Root Bucket Prefix Isolation**: Enables all catalogs (`data_engineering_dev`, `data_science_dev`, `data_analytics_dev`, `shared_enterprise_dev`) to use isolated `s3://<bucket>/catalogs/<domain>` prefixes inside a single governed UC root bucket without proliferating separate S3 buckets per catalog.
   - **Customer-Managed KMS Encryption (SSE-KMS)**: Enforces `aws:kms` encryption with `bucket_key_enabled = true` to reduce KMS API call costs by up to 99%.
   - **Delta Lake Storage Hygiene**: Sets S3 Versioning to `Disabled` per Databricks Unity Catalog best practices and aborts incomplete multipart uploads after 7 days.
   - **Zero Public Exposure & Deletion Guardrails**: Unconditionally blocks all public ACLs/policies and enforces `prevent_destroy = true`.
@@ -33,11 +33,11 @@
 
 ### 2.2 Storage Prefix Layout in `environments/dev`
 - **Primary UC Root Bucket (`msedek-dbx-dep-uc-metastore-root-dev`)**:
-  - `s3://msedek-dbx-dep-uc-metastore-root-dev/metastore-root` $\rightarrow$ Regional Metastore default root (`001.metastore`)
-  - `s3://msedek-dbx-dep-uc-metastore-root-dev/catalogs/data_engineering` $\rightarrow$ `data_engineering_dev` catalog (`003.catalogs`)
-  - `s3://msedek-dbx-dep-uc-metastore-root-dev/catalogs/data_science` $\rightarrow$ `data_science_dev` catalog (`003.catalogs`)
-  - `s3://msedek-dbx-dep-uc-metastore-root-dev/catalogs/business_analytics` $\rightarrow$ `business_analytics_dev` catalog (`003.catalogs`)
-  - `s3://msedek-dbx-dep-uc-metastore-root-dev/catalogs/shared_enterprise` $\rightarrow$ `shared_enterprise_dev` catalog (`003.catalogs`)
+  - `s3://msedek-dbx-dep-uc-metastore-root-dev/metastore` $\rightarrow$ Regional Metastore default root (`001.metastore`)
+  - `s3://msedek-dbx-dep-uc-metastore-root-dev/catalogs/data_engineering_dev` $\rightarrow$ `data_engineering_dev` catalog (`003.catalogs`)
+  - `s3://msedek-dbx-dep-uc-metastore-root-dev/catalogs/data_science_dev` $\rightarrow$ `data_science_dev` catalog (`003.catalogs`)
+  - `s3://msedek-dbx-dep-uc-metastore-root-dev/catalogs/data_analytics_dev` $\rightarrow$ `data_analytics_dev` catalog (`003.catalogs`)
+  - `s3://msedek-dbx-dep-uc-metastore-root-dev/catalogs/shared_enterprise_dev` $\rightarrow$ `shared_enterprise_dev` catalog (`003.catalogs`)
 - **External Volume Bucket (`msedek-dbx-dep-uc-ext-volumes-dev`)**:
   - `s3://msedek-dbx-dep-uc-ext-volumes-dev/external-volumes/...` $\rightarrow$ Governed External Location for `EXTERNAL` volumes (`005.volumes`)
 
@@ -113,7 +113,7 @@ This module does not invoke external submodules. It provisions native Amazon S3 
 | `bucket_name` | `string` | Base name of the S3 bucket for Unity Catalog storage | Yes |
 | `environment` | `string` | Deployment environment name (`dev`, `staging`, `prod`, `test`) | Yes |
 | `kms_key_arn` | `string` | Customer-managed KMS key ARN used for SSE-KMS | Yes |
-| `force_destroy` | `bool` | Whether all objects should be deleted when bucket is destroyed (`false`) | No |
+| `force_destroy` | `bool` | Whether all objects should be deleted when bucket is destroyed (`true`) | No |
 | `tags` | `map(string)` | Additional resource tags | No |
 
 ### 6.2 Essential Outputs Summary

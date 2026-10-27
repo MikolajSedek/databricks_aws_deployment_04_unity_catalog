@@ -499,3 +499,39 @@ When creating any new module or root environment, strictly follow this standard 
 - **Strict Apply Guardrail**:
   > [!CAUTION]
   > **NEVER run `terraform apply` without clear, explicit user consent.**
+
+### H. Strict Prohibition of Module-Level `depends_on` (Data-Flow Dependency Mandate)
+> [!CAUTION]
+> **NEVER use module-level `depends_on = [module.<name>]` in environment root modules (`environments/<env>/main.tf`) or calling configurations.**
+
+#### 1. Why Module-Level `depends_on` is Prohibited
+According to official [HashiCorp Terraform Documentation on `depends_on` for Modules](https://developer.hashicorp.com/terraform/language/meta-arguments/depends_on#depends_on-for-modules):
+- Setting `depends_on` on an entire `module` block creates an overly broad, coarse dependency between **all** resources in both modules.
+- It causes Terraform to treat all outputs and attributes of the downstream module as **(known after apply)** during `terraform plan`.
+- It breaks dynamic resource evaluation inside child modules (including `for_each`, `count`, and data sources), causing critical failures:
+  - `Invalid for_each argument: value depends on resource attributes that cannot be determined until apply`
+  - Unnecessary resource recreation or premature provider initialization errors.
+  - Serialization of completely independent resources across modules, severely degrading Terraform execution parallelism.
+
+#### 2. The Mandated Architecture: Data-Flow & Output-Level Dependencies
+Always establish module ordering through fine-grained **data-flow dependencies** and **output-level `depends_on`**:
+
+1. **Natural Data-Flow Dependencies (Inputs / Outputs)**:
+   - Pass specific outputs exported by upstream modules (`outputs.tf`) directly into downstream module input variables (`variables.tf`).
+   - Terraform builds a granular resource-to-resource Directed Acyclic Graph (DAG) without hiding static plan values.
+
+2. **Output-Level `depends_on` (Encapsulating Side-Effects in Child Modules)**:
+   - When an upstream module performs side-effects or permissions (such as `databricks_metastore_assignment`, `databricks_grants`, `aws_iam_role_policy_attachment`, or `time_sleep`) that must finish before downstream resources consume an output, place `depends_on` **directly inside the upstream module's `output` definition**:
+     ```terraform
+     # modules/04.unity_catalog/002.metastore_assignment/outputs.tf
+     output "metastore_id" {
+       description = "Metastore ID, guaranteed available after workspace assignment completes."
+       value       = var.metastore_id
+       depends_on  = [databricks_metastore_assignment.this]
+     }
+     ```
+   - Any downstream module consuming `metastore_id = module.metastore_assignment.metastore_id` will automatically wait for the workspace assignment to finish before creating catalogs, schemas, or credentials.
+
+3. **Ordering Attributes / Token Passing**:
+   - If two modules must run sequentially but do not share natural resource attributes, export an ordering attribute (e.g. `metastore_id`, `execution_token`, or resource ARN) from the upstream module and pass it into a variable on the downstream module.
+   - Do NOT attempt to bridge them with `depends_on = [module.<upstream>]`.

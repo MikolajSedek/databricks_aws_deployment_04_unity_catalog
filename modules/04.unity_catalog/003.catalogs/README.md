@@ -18,6 +18,7 @@
   - **Shared Root Bucket with Prefix Isolation**: Zero extra S3 buckets per catalog; clean S3 prefix boundaries (`s3://<uc-root-bucket>/catalogs/<domain>`).
   - **Workspace-Level Blast Radius Control**: `ISOLATED` catalogs (`data_engineering_dev`, `data_science_dev`, `business_analytics_dev`) can only be accessed from bound workspaces with explicit `READ_WRITE` or `READ_ONLY` binding modes, while `shared_enterprise_dev` uses `OPEN` mode for cross-workspace collaboration.
   - **Authoritative Group RBAC**: Uses `databricks_grants` to bind `USE_CATALOG`, `USE_SCHEMA`, `SELECT`, `MODIFY`, `CREATE_SCHEMA`, `CREATE_TABLE`, and `CREATE_VOLUME` privileges to account-level groups (`dbx-platform-admins`, `dbx-data-engineers`, `dbx-data-scientists`, `dbx-data-analysts`).
+  - **Data-Flow Synchronization**: Accepts `var.metastore_id` directly from `module.metastore_assignment.metastore_id` and exports `output "catalog_names"` with output-level `depends_on = [databricks_grants.this, databricks_workspace_binding.this]`.
 
 ---
 
@@ -35,7 +36,7 @@
 |:---|:---|:---:|:---|:---|:---|
 | `data_engineering` | `data_engineering_dev` | `ISOLATED` | `s3://<uc-root>/catalogs/data_engineering` | DE (`READ_WRITE`), DS (`READ_ONLY`), BA (`READ_ONLY`) | `dbx-data-engineers` (RW), `dbx-data-scientists` (RO), `dbx-data-analysts` (RO) |
 | `data_science` | `data_science_dev` | `ISOLATED` | `s3://<uc-root>/catalogs/data_science` | DS (`READ_WRITE`), DE (`READ_ONLY`) | `dbx-data-scientists` (RW), `dbx-data-engineers` (RO) |
-| `business_analytics` | `business_analytics_dev` | `ISOLATED` | `s3://<uc-root>/catalogs/business_analytics` | BA (`READ_WRITE`), DE (`READ_WRITE`) | `dbx-data-analysts` (RW), `dbx-data-engineers` (RW) |
+| `data_analytics` | `data_analytics_dev` | `ISOLATED` | `s3://<uc-root>/catalogs/data_analytics` | BA (`READ_WRITE`), DE (`READ_WRITE`) | `dbx-data-analysts` (RW), `dbx-data-engineers` (RW) |
 | `shared_enterprise` | `shared_enterprise_dev` | `OPEN` | `s3://<uc-root>/catalogs/shared_enterprise` | All Workspaces (`OPEN`) | `dbx-data-engineers` (RW), `dbx-data-scientists` (RO), `dbx-data-analysts` (RO) |
 
 ---
@@ -63,7 +64,7 @@ flowchart TD
     classDef bind fill:#E3F2FD,stroke:#1565C0,stroke-width:1.5px,color:#0D47A1;
     classDef out fill:#E8F5E9,stroke:#2E7D32,stroke-width:1.5px,color:#1B5E20;
 
-    Inputs["<img src='https://raw.githubusercontent.com/mingrammer/diagrams/master/resources/aws/general/general.png' width='28' height='28' style='width:28px;height:28px;max-width:28px;max-height:28px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>Inputs</b><br/>uc_root_bucket_name, workspace_ids, catalogs"]:::input
+    Inputs["<img src='https://raw.githubusercontent.com/mingrammer/diagrams/master/resources/aws/general/general.png' width='28' height='28' style='width:28px;height:28px;max-width:28px;max-height:28px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>Inputs</b><br/>metastore_id, uc_root_bucket_name, catalogs"]:::input
 
     Catalog["<img src='https://raw.githubusercontent.com/oieduardorabelo/databricks-architecture-icons/main/icons/png/unity-catalog.png' width='36' height='36' style='width:36px;height:36px;max-width:36px;max-height:36px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>databricks_catalog.this</b><br/>(s3://&lt;uc-root&gt;/catalogs/&lt;subpath&gt;)"]:::cat
 
@@ -71,12 +72,14 @@ flowchart TD
 
     Grants["<img src='https://raw.githubusercontent.com/oieduardorabelo/databricks-architecture-icons/main/icons/png/enterprise-security.png' width='32' height='32' style='width:32px;height:32px;max-width:32px;max-height:32px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>databricks_grants.this</b><br/>(Authoritative Catalog RBAC)"]:::bind
 
-    OutputNames["<img src='https://raw.githubusercontent.com/mingrammer/diagrams/master/resources/aws/general/general.png' width='28' height='28' style='width:28px;height:28px;max-width:28px;max-height:28px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>Output: catalog_names</b>"]:::out
+    OutputNames["<img src='https://raw.githubusercontent.com/mingrammer/diagrams/master/resources/aws/general/general.png' width='28' height='28' style='width:28px;height:28px;max-width:28px;max-height:28px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>Output: catalog_names</b><br/>(depends_on: grants & bindings)"]:::out
 
     Inputs --> Catalog
     Catalog --> Binding
     Catalog --> Grants
     Catalog --> OutputNames
+    Grants --> OutputNames
+    Binding --> OutputNames
 ```
 
 ---
@@ -87,7 +90,7 @@ This module does not invoke external submodules.
 
 - **Upstream Providers of Inputs**:
   - [`002.uc_root_bucket`](../../03.storage/002.uc_root_bucket) - Supplies `uc_root_bucket_name` for catalog prefix storage roots.
-  - [`002.metastore_assignment`](../002.metastore_assignment) - Ensures workspaces are attached to the metastore prior to catalog creation.
+  - [`002.metastore_assignment`](../002.metastore_assignment) - Supplies `metastore_id` directly to enforce data-flow dependency ordering without module-level `depends_on`.
 - **Consumers**:
   - [`004.schemas`](../004.schemas) - Consumes `catalog_names` map to provision second-level schemas inside each catalog.
 
@@ -103,15 +106,14 @@ This module does not invoke external submodules.
 | Variable | Type | Description | Required |
 |:---|:---:|:---|:---:|
 | `uc_root_bucket_name` | `string` | Shared Unity Catalog S3 root bucket name | Yes |
-| `workspace_ids` | `map(string)` | Map of workspace keys to numeric workspace IDs for bindings | Yes |
+| `metastore_id` | `string` | Parent Unity Catalog metastore ID to enforce implicit data-flow ordering | No (`null`) |
 | `catalogs` | `map(object)` | Map of catalog definitions, isolation modes, workspace bindings, and RBAC grants | Yes |
-| `owner_group_name` | `string` | Default account-level admin group owning catalogs (`dbx-platform-admins`) | No |
 
 ### 6.2 Essential Outputs Summary
 
 | Output | Type | Description | Downstream Consumer |
 |:---|:---:|:---|:---|
-| `catalog_names` | `map(string)` | Map of logical catalog keys to provisioned Unity Catalog names | `004.schemas` |
+| `catalog_names` | `map(string)` | Map of logical catalog keys to provisioned Unity Catalog names (with output-level `depends_on`) | `004.schemas` |
 
 ---
 

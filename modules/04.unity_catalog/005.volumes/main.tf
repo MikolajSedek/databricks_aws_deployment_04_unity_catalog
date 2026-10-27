@@ -103,7 +103,7 @@ resource "databricks_storage_credential" "external" {
   for_each = var.external_locations
 
   name           = "${each.value.name}-cred"
-  owner          = var.owner_group_name
+  metastore_id   = var.metastore_id
   read_only      = coalesce(each.value.read_only, false)
   isolation_mode = coalesce(each.value.isolation_mode, "ISOLATION_MODE_OPEN")
   force_destroy  = coalesce(each.value.force_destroy, false)

@@ -14,6 +14,15 @@ variable "owner_group_name" {
   type        = string
 }
 
+variable "volume_full_names" {
+  description = "Optional map of logical volume keys to volume identifiers (full_name, string_shared_as) exported by the volumes module."
+  type = map(object({
+    full_name        = string
+    string_shared_as = string
+  }))
+  default = {}
+}
+
 variable "shares" {
   description = "Map of Delta Sharing share definitions, objects to share, and recipient keys granted SELECT access."
   type = map(object({
@@ -21,7 +30,8 @@ variable "shares" {
     comment = string
     owner   = optional(string)
     objects = optional(list(object({
-      name                        = string
+      name                        = optional(string)
+      volume_key                  = optional(string)
       data_object_type            = string
       comment                     = optional(string)
       shared_as                   = optional(string)

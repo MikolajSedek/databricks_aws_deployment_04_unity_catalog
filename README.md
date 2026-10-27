@@ -14,14 +14,16 @@
   This repository (`04_unity_catalog`) is the fourth foundational pillar of the enterprise **Databricks on AWS Deployment** suite:
   1. `01_setup_vpc_networking` — Centralized Hub-and-Spoke VPC & AWS Network Firewall inspection.
   2. `02_setup_identity_management` — Account-level users, SCIM persona groups (`dbx-platform-admins`, `dbx-data-engineers`, `dbx-data-scientists`, `dbx-data-analysts`), and OAuth service principals.
-  3. `03_workspaces_and_compute_management` — Domain-isolated E2 Workspaces (`data_engineering`, `data_science`, `business_analytics`), cluster policies, compute clusters, and SQL warehouses.
-  4. **`04_unity_catalog` (This Repository)** — Regional **Unity Catalog Metastore**, hardened S3 root & external storage buckets, customer-managed KMS keys, multi-workspace metastore assignments, domain-isolated and shared catalogs with workspace bindings, medallion schemas, `MANAGED` and `EXTERNAL` volumes, native Unity Catalog secrets (`databricks_secret_uc`), and Open Delta Sharing.
+  3. `03_workspaces_and_compute_management` — Domain-isolated E2 Workspaces (`data_engineering`, `data_science`, `data_analytics`), cluster policies, compute clusters, and SQL warehouses.
+  4. **`04_unity_catalog` (This Repository)** — Regional **Unity Catalog Metastore**, hardened S3 root & external storage buckets, customer-managed KMS keys, multi-workspace metastore assignments, domain-isolated and shared catalogs with workspace bindings, 9 medallion/domain schemas, `MANAGED` and `EXTERNAL` volumes, native Unity Catalog secrets (`databricks_secret_uc`), workspace secret scopes, and Open Delta Sharing.
 - **Architectural Highlights**:
-  - **Shared UC Root Bucket with Prefix Isolation**: Uses a single hardened S3 root bucket (`msedek-dbx-dep-uc-metastore-root-dev`) encrypted with its own customer-managed KMS key (`uc_root_storage`), allocating distinct S3 prefixes per catalog (`s3://<bucket>/catalogs/<domain>`) rather than proliferating separate S3 buckets per catalog.
+  - **Shared UC Root Bucket with Prefix Isolation**: Uses a single hardened S3 root bucket (`msedek-dbx-dep-uc-metastore-root-dev`) encrypted with its own customer-managed KMS key (`uc_root`), allocating distinct S3 prefixes per catalog (`s3://<bucket>/catalogs/<domain>`) rather than proliferating separate S3 buckets per catalog.
   - **Non-Overlapping External Volume Architecture**: Provisions a dedicated S3 bucket (`msedek-dbx-dep-uc-ext-volumes-dev`) and KMS key (`uc_external_volumes`) for `EXTERNAL` volumes, satisfying Databricks Unity Catalog's strict path non-overlap rule while defaulting internal workloads to `MANAGED` volumes.
-  - **Native Unity Catalog Secrets (`databricks_secret_uc`)**: Stores secrets directly in the 3-level namespace (`<catalog>.<schema>.<secret_name>`) with `READ_SECRET` RBAC grants, alongside optional workspace secret scopes.
+  - **Dynamic Governance Discovery**: Automatically resolves the primary governance workspace URL via `data.databricks_current_user.data_engineering.workspace_url` with optional variable fallback, eliminating hardcoded URLs.
+  - **Native Unity Catalog Secrets (`databricks_secret_uc`)**: Stores secrets directly in the 3-level namespace (`<catalog>.<schema>.<secret_name>`) with `READ_SECRET` RBAC grants, alongside optional workspace secret scopes addressed using non-sensitive SHA256 composite keys.
   - **Zero Extra Compute Clusters**: Executes all governance operations via the account-level (`databricks.mws`) and workspace-level (`databricks.workspace`) REST APIs without provisioning any extra compute clusters.
-  - **Open Delta Sharing**: Configures the metastore with `delta_sharing_scope = "INTERNAL_AND_EXTERNAL"` and provisions a Delta Share (`databricks_share`) and external `TOKEN` recipient (`databricks_recipient`).
+  - **Open Delta Sharing**: Configures the metastore with `delta_sharing_scope = "INTERNAL_AND_EXTERNAL"` and provisions an Open Delta Share (`databricks_share`) and external `TOKEN` recipient (`databricks_recipient`).
+  - **Data-Flow Dependency Mandate**: Strictly adheres to HashiCorp best practices by avoiding module-level `depends_on = [module.<name>]` in favor of fine-grained output-level and variable-based data dependencies.
 
 ---
 
@@ -31,8 +33,8 @@
 1. **Cryptographic & State Foundation (`001.kms_key`, `001.env_backend_bucket`)**: Provisions CMKs with annual key rotation and `prevent_destroy = true` for the Terraform state backend, UC root bucket, and external volumes bucket.
 2. **Unity Catalog S3 Storage (`002.uc_root_bucket`)**: Provisions hardened S3 buckets with `BucketOwnerEnforced`, 100% public access block, SSE-KMS with S3 Bucket Keys, S3 Versioning `Disabled` (per Databricks Delta Lake best practice), and 7-day incomplete multipart upload cleanup.
 3. **Regional Metastore & IAM Trust (`001.metastore`)**: Generates the self-assuming IAM trust policy (`ExternalId = var.databricks_account_id`) and least-privilege S3/KMS policy, attaches an `aws_kms_grant`, waits 30 seconds (`time_sleep`) for IAM eventual consistency, and creates `databricks_metastore` and `databricks_metastore_data_access`.
-4. **Workspace Assignment (`002.metastore_assignment`)**: Dynamically discovers existing regional workspaces (`data.databricks_mws_workspaces.all`) and attaches them to the metastore.
-5. **3-Level Namespace & Open Sharing (`003.catalogs` $\rightarrow$ `004.schemas` $\rightarrow$ `005.volumes`, `002.uc_secrets`, `006.open_sharing`)**: Provisions catalogs, workspace bindings (`READ_WRITE` / `READ_ONLY`), schemas, managed/external volumes, UC secrets, Delta Sharing shares/recipients, and authoritative `databricks_grants`.
+4. **Workspace Assignment (`002.metastore_assignment`)**: Dynamically discovers existing regional workspaces (`data.databricks_mws_workspaces.all`), attaches them to the metastore, and exports `metastore_id` as an encapsulated data-flow gate.
+5. **3-Level Namespace & Open Sharing (`003.catalogs` $\rightarrow$ `004.schemas` $\rightarrow$ `005.volumes`, `002.uc_secrets`, `006.open_sharing`)**: Provisions 4 catalogs, workspace bindings (`READ_WRITE` / `READ_ONLY`), 9 schemas, 5 managed/external volumes, 2 UC secrets, 1 workspace secret scope, Delta Sharing share/recipient, and authoritative `databricks_grants`.
 
 ---
 
@@ -46,6 +48,9 @@
 │   ├── instructions.md               # Authoritative engineering & security rules
 │   └── README_TEMPLATE.md            # Standard README template
 ├── .github/
+│   ├── copilot-instructions.md       # Authoritative GitHub Copilot engineering & security instructions
+│   ├── mcp/                          # Model Context Protocol server configurations
+│   ├── skills/                       # Vendored AI skills & architectural playbooks
 │   └── workflows/
 │       ├── deploy-dev.yml            # Root CI/CD orchestrator (Pre-commit -> Plan -> Apply)
 │       ├── dpl-01-precommit.yml      # Formatting, TFLint, Gitleaks, Trivy checks
@@ -113,7 +118,7 @@ flowchart TD
 
     PersonaGroups -->|"RBAC Grants (Catalog / Schema / Volume / Secret)"| UCMetastore
     Workspaces -->|"Metastore Assignments & Catalog Bindings"| UCMetastore
-    ExternalRecipient -->|"Reads Shared Schema & Volume"| UCMetastore
+    ExternalRecipient -->|"Reads Shared Volume via Bearer Token"| UCMetastore
 ```
 
 ### 4.2 Level 2: Multi-Layer Governance & Storage Container Diagram
@@ -133,17 +138,17 @@ flowchart LR
 
     subgraph GovernanceTier ["Unity Catalog 3-Level Namespace"]
         MetastoreNode["<img src='https://raw.githubusercontent.com/oieduardorabelo/databricks-architecture-icons/main/icons/png/unity-catalog.png' width='36' height='36' style='width:36px;height:36px;max-width:36px;max-height:36px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>Regional Metastore</b>"]
-        CatalogsNode["<img src='https://raw.githubusercontent.com/oieduardorabelo/databricks-architecture-icons/main/icons/png/unity-catalog.png' width='32' height='32' style='width:32px;height:32px;max-width:32px;max-height:32px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>Catalogs & Schemas</b><br/>(DE, DS, BA, Shared)"]
-        LeafSecurables["<img src='https://raw.githubusercontent.com/oieduardorabelo/databricks-architecture-icons/main/icons/png/delta-lake.png' width='32' height='32' style='width:32px;height:32px;max-width:32px;max-height:32px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>Volumes, UC Secrets & Delta Shares</b>"]
+        CatalogsNode["<img src='https://raw.githubusercontent.com/oieduardorabelo/databricks-architecture-icons/main/icons/png/unity-catalog.png' width='32' height='32' style='width:32px;height:32px;max-width:32px;max-height:32px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>4 Catalogs & 9 Schemas</b><br/>(DE, DS, BA, Shared)"]
+        LeafSecurables["<img src='https://raw.githubusercontent.com/oieduardorabelo/databricks-architecture-icons/main/icons/png/delta-lake.png' width='32' height='32' style='width:32px;height:32px;max-width:32px;max-height:32px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>5 Volumes, 2 UC Secrets & Delta Share</b>"]
     end
     class GovernanceTier ucLayer;
 
-    subgraph WorkspacesTier ["Bound Databricks Workspaces"]
-        DE_WS["<img src='https://raw.githubusercontent.com/oieduardorabelo/databricks-architecture-icons/main/icons/png/workspace.png' width='28' height='28' style='width:28px;height:28px;max-width:28px;max-height:28px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>Data Engineering</b>"]
-        DS_WS["<img src='https://raw.githubusercontent.com/oieduardorabelo/databricks-architecture-icons/main/icons/png/workspace.png' width='28' height='28' style='width:28px;height:28px;max-width:28px;max-height:28px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>Data Science</b>"]
-        BA_WS["<img src='https://raw.githubusercontent.com/oieduardorabelo/databricks-architecture-icons/main/icons/png/workspace.png' width='28' height='28' style='width:28px;height:28px;max-width:28px;max-height:28px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>Business Analytics</b>"]
+    subgraph WorkspacesLayer ["Existing Regional Databricks E2 Workspaces"]
+        WS_DE["<img src='https://raw.githubusercontent.com/oieduardorabelo/databricks-architecture-icons/main/icons/png/workspace.png' width='32' height='32' style='width:32px;height:32px;max-width:32px;max-height:32px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>Data Engineering</b><br/>(Primary Governance Host)"]
+        WS_DS["<img src='https://raw.githubusercontent.com/oieduardorabelo/databricks-architecture-icons/main/icons/png/workspace.png' width='32' height='32' style='width:32px;height:32px;max-width:32px;max-height:32px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>Data Science</b>"]
+        WS_BA["<img src='https://raw.githubusercontent.com/oieduardorabelo/databricks-architecture-icons/main/icons/png/workspace.png' width='32' height='32' style='width:32px;height:32px;max-width:32px;max-height:32px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>Data Analytics</b>"]
     end
-    class WorkspacesTier wsLayer;
+    class WorkspacesLayer wsLayer;
 
     CMKs --> SharedRootS3
     CMKs --> ExtVolS3
@@ -152,27 +157,27 @@ flowchart LR
     ExtVolS3 --> LeafSecurables
     MetastoreNode --> CatalogsNode
     CatalogsNode --> LeafSecurables
-    MetastoreNode --> DE_WS
-    MetastoreNode --> DS_WS
-    MetastoreNode --> BA_WS
+    MetastoreNode --> WS_DE
+    MetastoreNode --> WS_DS
+    MetastoreNode --> WS_BA
 ```
 
 ---
 
 ## 5. All Modules Used with Short Summaries
 
-| Category | Module | Path | Description |
+| Category | Module Directory | Source Path | Primary Role / Responsibility |
 |:---|:---|:---|:---|
-| **Security** | `001.kms_key` | [`modules/02.security/001.kms_key`](./modules/02.security/001.kms_key) | Customer-managed KMS keys with automatic key rotation and `prevent_destroy` |
-| **Security** | `002.uc_secrets` | [`modules/02.security/002.uc_secrets`](./modules/02.security/002.uc_secrets) | Native Unity Catalog secrets (`databricks_secret_uc`), RBAC grants, and workspace scopes |
-| **Storage** | `001.env_backend_bucket` | [`modules/03.storage/001.env_backend_bucket`](./modules/03.storage/001.env_backend_bucket) | Hardened, versioned S3 bucket for remote Terraform state |
-| **Storage** | `002.uc_root_bucket` | [`modules/03.storage/002.uc_root_bucket`](./modules/03.storage/002.uc_root_bucket) | Hardened S3 bucket for Unity Catalog metastore root and external volume storage |
+| **Security** | `001.kms_key` | [`modules/02.security/001.kms_key`](./modules/02.security/001.kms_key) | Customer-managed KMS keys for state backend, UC root bucket, and external volumes |
+| **Security** | `002.uc_secrets` | [`modules/02.security/002.uc_secrets`](./modules/02.security/002.uc_secrets) | Native UC secrets (`databricks_secret_uc`), RBAC grants, and workspace scopes |
+| **Storage** | `001.env_backend_bucket` | [`modules/03.storage/001.env_backend_bucket`](./modules/03.storage/001.env_backend_bucket) | Versioned, SSE-KMS encrypted S3 bucket for Terraform remote state |
+| **Storage** | `002.uc_root_bucket` | [`modules/03.storage/002.uc_root_bucket`](./modules/03.storage/002.uc_root_bucket) | Hardened S3 bucket for UC root storage and external volumes |
 | **Unity Catalog** | `001.metastore` | [`modules/04.unity_catalog/001.metastore`](./modules/04.unity_catalog/001.metastore) | Regional metastore, least-privilege IAM role/policy, KMS grant, 30s sleep, and default data access |
-| **Unity Catalog** | `002.metastore_assignment` | [`modules/04.unity_catalog/002.metastore_assignment`](./modules/04.unity_catalog/002.metastore_assignment) | Attaches the regional metastore to existing Databricks workspaces |
-| **Unity Catalog** | `003.catalogs` | [`modules/04.unity_catalog/003.catalogs`](./modules/04.unity_catalog/003.catalogs) | Creates catalogs with shared-bucket S3 prefix isolation, workspace bindings, and RBAC |
-| **Unity Catalog** | `004.schemas` | [`modules/04.unity_catalog/004.schemas`](./modules/04.unity_catalog/004.schemas) | Creates second-level schemas within catalogs and enforces schema RBAC grants |
+| **Unity Catalog** | `002.metastore_assignment` | [`modules/04.unity_catalog/002.metastore_assignment`](./modules/04.unity_catalog/002.metastore_assignment) | Attaches the regional metastore to existing Databricks workspaces; exports `metastore_id` |
+| **Unity Catalog** | `003.catalogs` | [`modules/04.unity_catalog/003.catalogs`](./modules/04.unity_catalog/003.catalogs) | Creates 4 catalogs with shared-bucket S3 prefix isolation, workspace bindings, and RBAC |
+| **Unity Catalog** | `004.schemas` | [`modules/04.unity_catalog/004.schemas`](./modules/04.unity_catalog/004.schemas) | Creates 9 medallion/domain schemas within catalogs and enforces schema RBAC grants |
 | **Unity Catalog** | `005.volumes` | [`modules/04.unity_catalog/005.volumes`](./modules/04.unity_catalog/005.volumes) | Creates `MANAGED` and optional `EXTERNAL` volumes (plus storage credential & external location) |
-| **Unity Catalog** | `006.open_sharing` | [`modules/04.unity_catalog/006.open_sharing`](./modules/04.unity_catalog/006.open_sharing) | Creates Delta Sharing shares (`SCHEMA` & `VOLUME`), `TOKEN` recipients, and `SELECT` grants |
+| **Unity Catalog** | `006.open_sharing` | [`modules/04.unity_catalog/006.open_sharing`](./modules/04.unity_catalog/006.open_sharing) | Creates Delta Sharing share, external `TOKEN` recipient, and `SELECT` grant |
 
 ---
 
@@ -187,7 +192,7 @@ flowchart LR
 
 ```powershell
 # 1. Run pre-commit quality, linting, and security checks
-uv run pre-commit run --all-files
+.\.venv\Scripts\pre-commit.exe run --all-files
 
 # 2. Initialize and validate the dev environment
 terraform -chdir=environments/dev init
@@ -211,4 +216,5 @@ terraform -chdir=environments/dev plan -out=tfplan
 - [Dev Environment Documentation (`environments/dev/README.md`)](./environments/dev/README.md)
 - [Dev Environment Terraform Contract (`environments/dev/TERRAFORM.md`)](./environments/dev/TERRAFORM.md)
 - [GitHub Actions CI/CD Documentation (`.github/workflows/README.md`)](./.github/workflows/README.md)
+- [GitHub Copilot Custom Instructions (`.github/copilot-instructions.md`)](./.github/copilot-instructions.md)
 - [Project Instructions & Source of Truth (`.ai/instructions.md`)](./.ai/instructions.md)

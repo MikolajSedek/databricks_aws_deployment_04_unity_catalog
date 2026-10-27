@@ -71,7 +71,7 @@ locals {
       name            = "data_engineering_${local.env}"
       comment         = "Data Engineering catalog for raw ingestion and medallion ETL pipelines"
       isolation_mode  = "ISOLATED"
-      storage_subpath = "data_engineering_${local.env}"
+      storage_subpath = null
       properties = {
         domain      = "data-engineering"
         environment = local.env
@@ -115,7 +115,7 @@ locals {
       name            = "data_science_${local.env}"
       comment         = "Data Science catalog for feature tables, ML experiments, and model registries"
       isolation_mode  = "ISOLATED"
-      storage_subpath = "data_science_${local.env}"
+      storage_subpath = null
       properties = {
         domain      = "data-science"
         environment = local.env
@@ -128,7 +128,7 @@ locals {
         },
         {
           workspace_id = local.workspace_ids["data_engineering"]
-          binding_type = "BINDING_TYPE_READ_ONLY"
+          binding_type = "BINDING_TYPE_READ_WRITE"
         }
       ]
       grants = [
@@ -151,7 +151,7 @@ locals {
       name            = "data_analytics_${local.env}"
       comment         = "Data Analytics catalog for curated BI marts, semantic views, and executive dashboards"
       isolation_mode  = "ISOLATED"
-      storage_subpath = "data_analytics_${local.env}"
+      storage_subpath = null
       properties = {
         domain      = "data-analytics"
         environment = local.env
@@ -187,7 +187,7 @@ locals {
       name            = "shared_enterprise_${local.env}"
       comment         = "Cross-workspace shared enterprise catalog for reference data, UC secrets, and Delta Sharing"
       isolation_mode  = "OPEN"
-      storage_subpath = "shared_enterprise_${local.env}"
+      storage_subpath = null
       properties = {
         domain      = "enterprise-shared"
         environment = local.env
@@ -562,16 +562,9 @@ locals {
       comment = "Open Delta Sharing package exposing the shared_enterprise.external_sharing schema and partner volume"
       objects = [
         {
-          name                        = module.schemas.schema_names["shared_external_sharing"].full_name
-          data_object_type            = "SCHEMA"
-          comment                     = "Curated external sharing schema"
-          history_data_sharing_status = "ENABLED"
-        },
-        {
-          name             = module.volumes.volume_full_names["shared_partner_releases"].full_name
+          volume_key       = "shared_partner_releases"
           data_object_type = "VOLUME"
           comment          = "Curated partner data releases volume"
-          string_shared_as = module.volumes.volume_full_names["shared_partner_releases"].string_shared_as
         }
       ]
       recipient_keys = ["external_analytics_partner"]

@@ -29,7 +29,7 @@ No modules.
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
 | <a name="input_catalogs"></a> [catalogs](#input\_catalogs) | Map of catalog definitions including isolation mode, workspace bindings, and RBAC grants. | <pre>map(object({<br/>    name                           = string<br/>    comment                        = string<br/>    isolation_mode                 = optional(string, "ISOLATED")<br/>    enable_predictive_optimization = optional(string, "ENABLE")<br/>    force_destroy                  = optional(bool, false)<br/>    owner                          = optional(string)<br/>    storage_subpath                = optional(string)<br/>    properties                     = optional(map(string), {})<br/>    workspace_bindings = optional(list(object({<br/>      workspace_id = number<br/>      binding_type = optional(string, "BINDING_TYPE_READ_WRITE")<br/>    })), [])<br/>    grants = optional(list(object({<br/>      principal  = string<br/>      privileges = list(string)<br/>    })), [])<br/>  }))</pre> | n/a | yes |
-| <a name="input_owner_group_name"></a> [owner\_group\_name](#input\_owner\_group\_name) | Default account-level admin group owning the catalogs (e.g. dbx-platform-admins). | `string` | n/a | yes |
+| <a name="input_metastore_id"></a> [metastore\_id](#input\_metastore\_id) | Optional parent Unity Catalog metastore ID to enforce implicit data-flow ordering. | `string` | `null` | no |
 | <a name="input_uc_root_bucket_name"></a> [uc\_root\_bucket\_name](#input\_uc\_root\_bucket\_name) | Name of the shared Unity Catalog root S3 bucket where catalog managed prefixes reside. | `string` | n/a | yes |
 
 ## Outputs

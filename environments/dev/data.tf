@@ -44,3 +44,9 @@ data "databricks_group" "data_analysts" {
   provider     = databricks.mws
   display_name = "dbx-data-analysts"
 }
+
+/* 4. Deployment Service Principal */
+data "databricks_service_principal" "deployer" {
+  provider       = databricks.mws
+  application_id = var.service_principal_id
+}

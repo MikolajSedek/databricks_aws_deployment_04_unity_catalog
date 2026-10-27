@@ -41,7 +41,7 @@ variable "kms_key_arn" {
 variable "force_destroy" {
   description = "Whether all objects should be deleted from the bucket when the bucket is destroyed."
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "tags" {

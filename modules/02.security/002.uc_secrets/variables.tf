@@ -12,11 +12,6 @@
   grants, alongside optional workspace secret scopes (databricks_secret_scope).
 */
 
-variable "owner_group_name" {
-  description = "Default account-level admin group owning the Unity Catalog secrets (e.g. dbx-platform-admins)."
-  type        = string
-}
-
 variable "schema_names" {
   description = "Map of logical schema keys to resolved catalog_name, schema_name, and full_name."
   type = map(object({

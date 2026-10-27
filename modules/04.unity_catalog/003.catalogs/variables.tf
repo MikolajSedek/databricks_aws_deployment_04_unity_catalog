@@ -10,13 +10,14 @@
   workspace bindings, and enforcing role-based access control (RBAC) grants.
 */
 
-variable "uc_root_bucket_name" {
-  description = "Name of the shared Unity Catalog root S3 bucket where catalog managed prefixes reside."
+variable "metastore_id" {
+  description = "Optional parent Unity Catalog metastore ID to enforce implicit data-flow ordering."
   type        = string
+  default     = null
 }
 
-variable "owner_group_name" {
-  description = "Default account-level admin group owning the catalogs (e.g. dbx-platform-admins)."
+variable "uc_root_bucket_name" {
+  description = "Name of the shared Unity Catalog root S3 bucket where catalog managed prefixes reside."
   type        = string
 }
 

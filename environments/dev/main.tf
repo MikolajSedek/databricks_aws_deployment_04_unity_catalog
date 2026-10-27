@@ -6,6 +6,7 @@
     - https://registry.terraform.io/providers/databricks/databricks/latest/docs/guides/unity-catalog
 
   Root module orchestrating end-to-end Databricks Unity Catalog governance on AWS:
+    0. Metastore Admin Service Principal Membership.
     1. Remote S3 State Backend Storage & Backend KMS Key.
     2. Extra Customer-Managed KMS Keys (UC Metastore Root & Optional External Volumes).
     3. Unity Catalog Root S3 Bucket & Optional External Volumes S3 Bucket.
@@ -17,6 +18,14 @@
     9. Governed Secrets in Unity Catalog (databricks_secret_uc) & Workspace Secret Scopes.
     10. Basic Open Delta Sharing Setup (Shares, TOKEN Recipients, and SELECT Share Grants).
 */
+
+/* 0. Metastore Admin Service Principal Membership in dbx-platform-admins */
+
+resource "databricks_group_member" "deployer_admin" {
+  provider  = databricks.mws
+  group_id  = data.databricks_group.platform_admins.id
+  member_id = data.databricks_service_principal.deployer.id
+}
 
 /* 1. Remote S3 State Backend Storage */
 
@@ -82,9 +91,12 @@ module "metastore" {
   bucket_name                     = module.uc_root_bucket.bucket_name
   kms_key_arn                     = module.extra_kms_keys["uc_root"].kms_arn
   iam_role_name                   = local.metastore_iam_role
+  owner                           = data.databricks_service_principal.deployer.application_id
   owner_group_name                = local.admin_group_name
   delta_sharing_scope             = "INTERNAL_AND_EXTERNAL"
   delta_sharing_organization_name = "${local.project_name}-${local.env}"
+
+  depends_on = [databricks_group_member.deployer_admin]
 }
 
 /* 5. Metastore Assignment to Existing Workspaces */
@@ -109,11 +121,9 @@ module "catalogs" {
     databricks = databricks.workspace
   }
 
+  metastore_id        = module.metastore_assignment.metastore_id
   uc_root_bucket_name = module.uc_root_bucket.bucket_name
-  owner_group_name    = local.admin_group_name
   catalogs            = local.catalogs
-
-  depends_on = [module.metastore_assignment]
 }
 
 /* 7. Schemas within Catalogs with RBAC */
@@ -139,6 +149,7 @@ module "volumes" {
     databricks = databricks.workspace
   }
 
+  metastore_id          = module.metastore_assignment.metastore_id
   aws_account_id        = var.aws_account_id
   databricks_account_id = var.databricks_account_id
   owner_group_name      = local.admin_group_name
@@ -156,10 +167,9 @@ module "uc_secrets" {
     databricks = databricks.workspace
   }
 
-  owner_group_name = local.admin_group_name
-  schema_names     = module.schemas.schema_names
-  uc_secrets       = local.uc_secrets
-  secret_scopes    = local.secret_scopes
+  schema_names  = module.schemas.schema_names
+  uc_secrets    = local.uc_secrets
+  secret_scopes = local.secret_scopes
 }
 
 /* 10. Basic Open Delta Sharing Setup */
@@ -174,6 +184,4 @@ module "open_sharing" {
   owner_group_name = local.admin_group_name
   shares           = local.open_sharing_shares
   recipients       = local.open_sharing_recipients
-
-  depends_on = [module.volumes]
 }

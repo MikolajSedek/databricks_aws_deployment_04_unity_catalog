@@ -35,12 +35,14 @@
 
 | Name | Type |
 |------|------|
+| [databricks_group_member.deployer_admin](https://registry.terraform.io/providers/databricks/databricks/1.135.0/docs/resources/group_member) | resource |
 | [databricks_current_user.data_engineering](https://registry.terraform.io/providers/databricks/databricks/1.135.0/docs/data-sources/current_user) | data source |
 | [databricks_group.data_analysts](https://registry.terraform.io/providers/databricks/databricks/1.135.0/docs/data-sources/group) | data source |
 | [databricks_group.data_engineers](https://registry.terraform.io/providers/databricks/databricks/1.135.0/docs/data-sources/group) | data source |
 | [databricks_group.data_scientists](https://registry.terraform.io/providers/databricks/databricks/1.135.0/docs/data-sources/group) | data source |
 | [databricks_group.platform_admins](https://registry.terraform.io/providers/databricks/databricks/1.135.0/docs/data-sources/group) | data source |
 | [databricks_mws_workspaces.all](https://registry.terraform.io/providers/databricks/databricks/1.135.0/docs/data-sources/mws_workspaces) | data source |
+| [databricks_service_principal.deployer](https://registry.terraform.io/providers/databricks/databricks/1.135.0/docs/data-sources/service_principal) | data source |
 
 ## Inputs
 

@@ -6,9 +6,8 @@
     - https://registry.terraform.io/providers/databricks/databricks/latest/docs/resources/grants
 
   Provisions top-level Unity Catalog catalogs:
-    1. Creates databricks_catalog resources using dedicated prefix paths inside the shared
-       Unity Catalog root S3 bucket (s3://<uc_root_bucket_name>/catalogs/<subpath>),
-       avoiding the need for separate S3 buckets per catalog while preserving logical path separation.
+    1. Creates databricks_catalog resources inside the regional metastore storage root,
+       or at an optional custom storage_subpath when backed by an external location.
     2. Attaches ISOLATED catalogs to designated workspaces via databricks_workspace_binding
        with configurable READ_WRITE or READ_ONLY binding modes.
     3. Applies authoritative role-based access control grants via databricks_grants.
@@ -19,11 +18,12 @@ resource "databricks_catalog" "this" {
   for_each = var.catalogs
 
   name                           = each.value.name
+  metastore_id                   = var.metastore_id
   comment                        = each.value.comment
-  storage_root                   = "s3://${var.uc_root_bucket_name}/catalogs/${coalesce(each.value.storage_subpath, each.value.name)}"
+  storage_root                   = each.value.storage_subpath != null ? "s3://${var.uc_root_bucket_name}/catalogs/${each.value.storage_subpath}" : null
   isolation_mode                 = coalesce(each.value.isolation_mode, "ISOLATED")
   enable_predictive_optimization = coalesce(each.value.enable_predictive_optimization, "ENABLE")
-  owner                          = coalesce(each.value.owner, var.owner_group_name)
+  owner                          = each.value.owner
   force_destroy                  = coalesce(each.value.force_destroy, false)
   properties                     = coalesce(each.value.properties, {})
 }

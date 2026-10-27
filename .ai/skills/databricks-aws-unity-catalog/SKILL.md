@@ -529,7 +529,9 @@ resource "databricks_cluster" "single_user" {
 ### C. Workspace Assignment Dependency Order
 - **Symptom**: `databricks_catalog` fails with `Workspace not associated with any metastore`.
 - **Cause**: Terraform parallel execution attempted to create catalog objects before the workspace was bound to the metastore.
-- **Remediation**: Explicitly set `depends_on = [databricks_metastore_assignment.this]` on root catalog definitions.
+- **Remediation**:
+  - In single-module architectures, set resource-level `depends_on = [databricks_metastore_assignment.this]` on catalog definitions.
+  - In multi-module architectures, **NEVER** use module-level `depends_on = [module.metastore_assignment]` (which triggers plan-time unknown value propagation and breaks child dynamic loops like `for_each`). Instead, establish a data-flow dependency: export `output "metastore_id"` in `modules/04.unity_catalog/002.metastore_assignment/outputs.tf` with an output-level `depends_on = [databricks_metastore_assignment.this]`, and pass `metastore_id = module.metastore_assignment.metastore_id` into downstream modules.
 
 ### D. Avoid Account Owner in Automation
 - **Symptom**: State lock or permission errors when modifying admin groups.

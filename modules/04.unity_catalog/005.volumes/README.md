@@ -19,7 +19,7 @@
 - **Key Business & Security Outcomes**:
   - **POSIX-Style Governed File Access**: All volumes are accessible across clusters, SQL warehouses, and jobs via `/Volumes/<catalog>/<schema>/<volume_name>/` without mounting S3 buckets (`dbutils.fs.mount` is deprecated).
   - **Granular Volume RBAC**: Enforces `READ_VOLUME` and `WRITE_VOLUME` permissions per account group (`dbx-data-engineers`, `dbx-data-scientists`, `dbx-data-analysts`).
-  - **Delta Sharing Volume Support**: Exports `volume_full_names` (`<catalog>.<schema>.<volume>`) so volumes can be shared externally via Delta Sharing (`006.open_sharing`).
+  - **Delta Sharing Volume Support**: Exports `volume_full_names` (`full_name` and `string_shared_as`) with encapsulated output-level `depends_on = [databricks_grants.volume, databricks_grants.external_location]` consumed by `006.open_sharing`.
 
 ---
 
@@ -41,11 +41,11 @@
 
 | Volume Key | Full Unity Catalog Path (`/Volumes/...`) | Type | Backing Storage Location | Primary RBAC Groups |
 |:---|:---|:---:|:---|:---|
-| `de_raw_landing_managed` | `/Volumes/data_engineering_dev/raw_ingestion/autoloader_landing_zone` | `MANAGED` | Shared UC Root Bucket (`catalogs/data_engineering/...`) | `dbx-data-engineers` (`READ_VOLUME`, `WRITE_VOLUME`) |
-| `de_external_partner_drop` | `/Volumes/data_engineering_dev/raw_ingestion/partner_external_drop` | `EXTERNAL` | External Bucket (`s3://msedek-dbx-dep-uc-ext-volumes-dev/external-volumes/partner-drop`) | `dbx-data-engineers` (`READ_VOLUME`, `WRITE_VOLUME`) |
-| `ds_model_checkpoints_managed` | `/Volumes/data_science_dev/model_artifacts/training_checkpoints` | `MANAGED` | Shared UC Root Bucket (`catalogs/data_science/...`) | `dbx-data-scientists` (`READ_VOLUME`, `WRITE_VOLUME`), `dbx-data-engineers` (`READ_VOLUME`) |
-| `ba_executive_exports_managed` | `/Volumes/business_analytics_dev/reporting_gold/executive_report_exports` | `MANAGED` | Shared UC Root Bucket (`catalogs/business_analytics/...`) | `dbx-data-analysts` (`READ_VOLUME`, `WRITE_VOLUME`), `dbx-data-engineers` (`READ_VOLUME`, `WRITE_VOLUME`) |
-| `shared_open_sharing_files` | `/Volumes/shared_enterprise_dev/open_sharing_outbox/shared_data_files` | `MANAGED` | Shared UC Root Bucket (`catalogs/shared_enterprise/...`) | `dbx-data-engineers` (`READ_VOLUME`, `WRITE_VOLUME`), `dbx-data-analysts` (`READ_VOLUME`) + Delta Sharing |
+| `de_raw_events_landing` | `/Volumes/data_engineering_dev/raw_ingestion/raw_events_landing` | `MANAGED` | Shared UC Root Bucket (`catalogs/data_engineering/...`) | `dbx-data-engineers` (`READ_VOLUME`, `WRITE_VOLUME`) |
+| `de_partner_external_dropzone` | `/Volumes/data_engineering_dev/raw_ingestion/partner_external_dropzone` | `EXTERNAL` | External Bucket (`s3://msedek-dbx-dep-uc-ext-volumes-dev/external-volumes/partner-dropzone`) | `dbx-data-engineers` (`READ_VOLUME`, `WRITE_VOLUME`), `dbx-data-scientists` (`READ_VOLUME`) |
+| `ds_model_checkpoints` | `/Volumes/data_science_dev/ml_artifacts/model_checkpoints` | `MANAGED` | Shared UC Root Bucket (`catalogs/data_science/...`) | `dbx-data-scientists` (`READ_VOLUME`, `WRITE_VOLUME`), `dbx-data-engineers` (`READ_VOLUME`) |
+| `da_report_exports` | `/Volumes/data_analytics_dev/bi_reporting/report_exports` | `MANAGED` | Shared UC Root Bucket (`catalogs/data_analytics/...`) | `dbx-data-analysts` (`READ_VOLUME`, `WRITE_VOLUME`), `dbx-data-engineers` (`READ_VOLUME`, `WRITE_VOLUME`) |
+| `shared_partner_releases` | `/Volumes/shared_enterprise_dev/external_sharing/partner_data_releases` | `MANAGED` | Shared UC Root Bucket (`catalogs/shared_enterprise/...`) | `dbx-data-engineers` (`READ_VOLUME`, `WRITE_VOLUME`), `dbx-data-analysts` (`READ_VOLUME`) + Delta Sharing |
 
 ---
 
@@ -76,7 +76,7 @@ flowchart TD
     classDef ucVol fill:#FCE4EC,stroke:#C2185B,stroke-width:2px,color:#880E4F;
     classDef out fill:#E8F5E9,stroke:#2E7D32,stroke-width:1.5px,color:#1B5E20;
 
-    Inputs["<img src='https://raw.githubusercontent.com/mingrammer/diagrams/master/resources/aws/general/general.png' width='28' height='28' style='width:28px;height:28px;max-width:28px;max-height:28px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>Inputs</b><br/>schema_names, external_locations, volumes"]:::input
+    Inputs["<img src='https://raw.githubusercontent.com/mingrammer/diagrams/master/resources/aws/general/general.png' width='28' height='28' style='width:28px;height:28px;max-width:28px;max-height:28px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>Inputs</b><br/>metastore_id, schema_names, external_locations, volumes"]:::input
 
     subgraph ExtInfra ["Optional External Storage Credential & Location"]
         ExtRole["<img src='https://raw.githubusercontent.com/mingrammer/diagrams/master/resources/aws/security/identity-and-access-management-iam-role.png' width='28' height='28' style='width:28px;height:28px;max-width:28px;max-height:28px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>aws_iam_role.external + KMS Grant + 30s Sleep</b>"]
@@ -92,7 +92,7 @@ flowchart TD
     end
     class VolumesLayer ucVol;
 
-    OutputVol["<img src='https://raw.githubusercontent.com/mingrammer/diagrams/master/resources/aws/general/general.png' width='28' height='28' style='width:28px;height:28px;max-width:28px;max-height:28px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>Output: volume_full_names</b>"]:::out
+    OutputVol["<img src='https://raw.githubusercontent.com/mingrammer/diagrams/master/resources/aws/general/general.png' width='28' height='28' style='width:28px;height:28px;max-width:28px;max-height:28px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>Output: volume_full_names</b><br/>(depends_on: grants)"]:::out
 
     Inputs --> ExtRole
     ExtRole --> StorageCred
@@ -102,6 +102,7 @@ flowchart TD
     ExtGrants --> Volume
     Volume --> VolGrants
     Volume --> OutputVol
+    VolGrants --> OutputVol
 ```
 
 ---
@@ -111,11 +112,12 @@ flowchart TD
 This module does not invoke external submodules.
 
 - **Upstream Providers of Inputs**:
+  - [`002.metastore_assignment`](../002.metastore_assignment) - Supplies `metastore_id` directly to enforce clean data-flow ordering.
   - [`004.schemas`](../004.schemas) - Supplies `schema_names`.
   - [`002.uc_root_bucket`](../../03.storage/002.uc_root_bucket) - Supplies `bucket_name` for the optional external volumes bucket.
   - [`001.kms_key`](../../02.security/001.kms_key) - Supplies `kms_arn` (`uc_external_volumes`) for external location SSE-KMS encryption.
 - **Consumers**:
-  - [`006.open_sharing`](../006.open_sharing) - Consumes `volume_full_names` (via `locals.tf`) to publish volumes through Delta Sharing.
+  - [`006.open_sharing`](../006.open_sharing) - Consumes `volume_full_names` (via `locals.tf`) to publish volumes through Open Delta Sharing.
 
 ---
 
@@ -128,17 +130,19 @@ This module does not invoke external submodules.
 
 | Variable | Type | Description | Required |
 |:---|:---:|:---|:---:|
+| `metastore_id` | `string` | Regional Unity Catalog metastore ID establishing data-flow dependency | Yes |
 | `aws_account_id` | `string` | 12-digit AWS Account ID (`sensitive = true`) | Yes |
 | `databricks_account_id` | `string` | Databricks Account UUID (`sensitive = true`) | Yes |
 | `schema_names` | `map(object)` | Map of schema keys to `{catalog_name, schema_name, full_name}` from `004.schemas` | Yes |
 | `external_locations` | `map(object)` | Optional map of external S3 locations to provision for `EXTERNAL` volumes | No (`{}`) |
 | `volumes` | `map(object)` | Map of `MANAGED` and `EXTERNAL` volumes and their RBAC grants | Yes |
+| `owner_group_name` | `string` | Default account-level admin group owning volumes (`dbx-platform-admins`) | No |
 
 ### 6.2 Essential Outputs Summary
 
 | Output | Type | Description | Downstream Consumer |
 |:---|:---:|:---|:---|
-| `volume_full_names` | `map(string)` | Map of volume keys to 3-level `<catalog>.<schema>.<volume>` names | `006.open_sharing` |
+| `volume_full_names` | `map(object)` | Map of volume keys to `{full_name, string_shared_as}` with output-level `depends_on = [databricks_grants.volume, databricks_grants.external_location]` | `006.open_sharing` |
 
 ---
 

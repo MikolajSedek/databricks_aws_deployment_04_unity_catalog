@@ -15,7 +15,7 @@
 - **Key Business & Security Outcomes**:
   - **Unified 3-Level Namespace Governance**: Credentials reside inside Unity Catalog schemas alongside tables and volumes under centralized audit logging.
   - **Least-Privilege Secret Access**: Fine-grained `READ_SECRET` and `MANAGE` grants restrict secret decryption to authorized account-level groups (`dbx-data-engineers`, `dbx-data-scientists`, `dbx-platform-admins`).
-  - **State Sensitivity Protection**: Secret values are marked `sensitive = true` in Terraform input variables to prevent plaintext exposure in CLI logs and CI/CD summaries.
+  - **State Sensitivity Protection & Hash-Based Resource Addressing**: Secret values are marked `sensitive = true` in Terraform input variables. For workspace secret scopes, resource addressing uses deterministic SHA256 hashes computed exclusively over non-sensitive composite keys (`sha256("${scope_name}/${secret_key}")`), completely eliminating `Invalid for_each argument: sensitive value` planning errors.
   - **Dual-Mode Compatibility**: Supports both modern Unity Catalog native secrets and optional workspace-scoped `DATABRICKS`-backed secret scopes.
 
 ---
@@ -26,13 +26,13 @@
 1. **Schema Reference Resolution**: Each entry in `var.uc_secrets` references a logical `schema_key` resolved from `var.schema_names` (output of `004.schemas`), guaranteeing that the parent catalog and schema exist before secret creation.
 2. **Native UC Secret Creation**: Provisions `databricks_secret_uc.this` with `catalog_name`, `schema_name`, `name`, `value` (sensitive), `owner`, `comment`, and optional RFC3339 `expire_time`.
 3. **Authoritative UC Secret Grants**: Filters secrets with non-empty `grants` in `locals.tf` (`local.uc_secrets_with_grants`) and provisions `databricks_grants.uc_secret` targeting `secret = databricks_secret_uc.this[each.key].full_name`.
-4. **Optional Workspace Secret Scopes**: Flattens `var.workspace_secret_scopes` into `local.workspace_secrets` and `local.workspace_scope_acls` to provision `databricks_secret_scope.this`, `databricks_secret.this`, and `databricks_secret_acl.this`.
+4. **Deterministic Workspace Secret Addressing**: For optional workspace secret scopes (`var.secret_scopes`), `locals.tf` flattens scopes into `local.workspace_secrets` using a clean, non-sensitive hash key `sha256("${scope_key}/${secret_key}")` while keeping the secret value isolated in the value block. This ensures that `for_each = local.workspace_secrets` on `databricks_secret.this` and `databricks_secret_acl.this` executes cleanly without sensitive value leaks.
 
 ### 2.2 Secret Consumption Flow
 - **SQL & Lakeflow / PySpark (Unity Catalog Secrets)**:
   `SELECT SECRET('shared_enterprise_dev.security_vault', 'external_ingestion_api_key');`
 - **Legacy Notebooks (Workspace Secret Scopes)**:
-  `dbutils.secrets.get(scope="platform-shared-credentials-dev", key="external_ingestion_api_key")`
+  `dbutils.secrets.get(scope="uc-platform-integrations-dev", key="external_ingestion_api_key")`
 
 ---
 
@@ -42,7 +42,7 @@
 
 | Resource Type | Target Scope | Supported Privileges / Permissions | Purpose |
 |:---|:---:|:---|:---|
-| `databricks_secret_uc` | `<catalog>.<schema>.<name>` | Owned by `var.owner_group_name` (`dbx-platform-admins`) | Stores encrypted secret value in Unity Catalog |
+| `databricks_secret_uc` | `<catalog>.<schema>.<name>` | Owned by secret `owner` or creator | Stores encrypted secret value in Unity Catalog |
 | `databricks_grants` (`secret`) | `databricks_secret_uc.full_name` | `READ_SECRET`, `MANAGE`, `ALL_PRIVILEGES` | Authoritative RBAC grants for account groups |
 | `databricks_secret_scope` | Workspace | `backend_type = "DATABRICKS"` | Optional workspace-local secret container |
 | `databricks_secret` | Workspace Scope | Inherited from scope ACL | Stores key-value secret inside workspace scope |
@@ -60,9 +60,9 @@ flowchart TD
     classDef ucSec fill:#FCE4EC,stroke:#C2185B,stroke-width:2px,color:#880E4F;
     classDef wsSec fill:#E3F2FD,stroke:#1565C0,stroke-width:1.5px,color:#0D47A1;
 
-    Inputs["<img src='https://raw.githubusercontent.com/mingrammer/diagrams/master/resources/aws/general/general.png' width='28' height='28' style='width:28px;height:28px;max-width:28px;max-height:28px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>Inputs</b><br/>schema_names, uc_secrets, workspace_secret_scopes"]:::input
+    Inputs["<img src='https://raw.githubusercontent.com/mingrammer/diagrams/master/resources/aws/general/general.png' width='28' height='28' style='width:28px;height:28px;max-width:28px;max-height:28px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>Inputs</b><br/>schema_names, uc_secrets, secret_scopes"]:::input
 
-    subgraph UCNamespace ["Unity Catalog 3-Level Namespace (<catalog>.<schema>.<secret>)"]
+    subgraph UCNamespace ["Unity Catalog 3-Level Namespace (catalog.schema.secret)"]
         UCSecret["<img src='https://raw.githubusercontent.com/oieduardorabelo/databricks-architecture-icons/main/icons/png/enterprise-security.png' width='36' height='36' style='width:36px;height:36px;max-width:36px;max-height:36px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>databricks_secret_uc.this</b><br/>(Encrypted UC Secret)"]
         UCGrants["<img src='https://raw.githubusercontent.com/oieduardorabelo/databricks-architecture-icons/main/icons/png/unity-catalog.png' width='28' height='28' style='width:28px;height:28px;max-width:28px;max-height:28px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>databricks_grants.uc_secret</b><br/>(READ_SECRET / MANAGE)"]
     end
@@ -70,8 +70,8 @@ flowchart TD
 
     subgraph WSScope ["Optional Workspace Secret Scope"]
         Scope["<img src='https://raw.githubusercontent.com/oieduardorabelo/databricks-architecture-icons/main/icons/png/workspace.png' width='28' height='28' style='width:28px;height:28px;max-width:28px;max-height:28px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>databricks_secret_scope.this</b>"]
-        WSSecret["<img src='https://raw.githubusercontent.com/oieduardorabelo/databricks-architecture-icons/main/icons/png/enterprise-security.png' width='28' height='28' style='width:28px;height:28px;max-width:28px;max-height:28px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>databricks_secret.this</b>"]
-        WSACL["<img src='https://raw.githubusercontent.com/mingrammer/diagrams/master/resources/aws/security/identity-and-access-management-iam-permissions.png' width='28' height='28' style='width:28px;height:28px;max-width:28px;max-height:28px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>databricks_secret_acl.this</b>"]
+        WSSecret["<img src='https://raw.githubusercontent.com/oieduardorabelo/databricks-architecture-icons/main/icons/png/enterprise-security.png' width='28' height='28' style='width:28px;height:28px;max-width:28px;max-height:28px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>databricks_secret.this</b><br/>(sha256 composite keys)"]
+        WSACL["<img src='https://raw.githubusercontent.com/mingrammer/diagrams/master/resources/aws/security/identity-and-access-management-iam.png' width='28' height='28' style='width:28px;height:28px;max-width:28px;max-height:28px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>databricks_secret_acl.this</b>"]
     end
     class WSScope wsSec;
 
@@ -106,8 +106,7 @@ This module does not invoke external submodules. It provisions native Databricks
 |:---|:---:|:---|:---:|
 | `schema_names` | `map(object)` | Map of schema keys to `{catalog_name, schema_name, full_name}` from `004.schemas` | Yes |
 | `uc_secrets` | `map(object)` | Map of Unity Catalog secrets (`databricks_secret_uc`) and RBAC grants (`sensitive = true`) | No (`{}`) |
-| `workspace_secret_scopes` | `map(object)` | Optional map of workspace-level secret scopes, secrets, and ACLs (`sensitive = true`) | No (`{}`) |
-| `owner_group_name` | `string` | Default account-level group assigned as owner of UC secrets (`dbx-platform-admins`) | No |
+| `secret_scopes` | `map(object)` | Optional map of workspace-level secret scopes, secrets, and ACLs (`sensitive = true`) | No (`{}`) |
 
 ### 6.2 Essential Outputs Summary
 

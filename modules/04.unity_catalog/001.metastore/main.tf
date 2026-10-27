@@ -99,7 +99,7 @@ resource "databricks_metastore" "this" {
   name                                              = var.metastore_name
   region                                            = var.aws_region
   storage_root                                      = "s3://${var.bucket_name}/metastore"
-  owner                                             = var.owner_group_name
+  owner                                             = var.owner != null ? var.owner : var.owner_group_name
   delta_sharing_scope                               = var.delta_sharing_scope
   delta_sharing_recipient_token_lifetime_in_seconds = var.delta_sharing_recipient_token_lifetime_in_seconds
   delta_sharing_organization_name                   = var.delta_sharing_organization_name
@@ -114,7 +114,7 @@ resource "databricks_metastore_data_access" "this" {
   metastore_id = databricks_metastore.this.id
   name         = aws_iam_role.metastore_data_access.name
   is_default   = true
-  owner        = var.owner_group_name
+  owner        = var.owner != null ? var.owner : var.owner_group_name
 
   aws_iam_role {
     role_arn = aws_iam_role.metastore_data_access.arn

@@ -11,6 +11,12 @@
   external location, and RBAC grants).
 */
 
+variable "metastore_id" {
+  description = "Optional parent Unity Catalog metastore ID to enforce implicit data-flow ordering."
+  type        = string
+  default     = null
+}
+
 variable "aws_account_id" {
   description = "12-digit AWS Account ID used when provisioning optional external storage credentials."
   type        = string

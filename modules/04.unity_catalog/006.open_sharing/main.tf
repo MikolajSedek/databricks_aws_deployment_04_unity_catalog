@@ -23,11 +23,11 @@ resource "databricks_share" "this" {
   dynamic "object" {
     for_each = coalesce(each.value.objects, [])
     content {
-      name                        = object.value.name
+      name                        = object.value.volume_key != null ? var.volume_full_names[object.value.volume_key].full_name : object.value.name
       data_object_type            = object.value.data_object_type
       comment                     = object.value.comment
       shared_as                   = object.value.shared_as
-      string_shared_as            = object.value.string_shared_as
+      string_shared_as            = object.value.volume_key != null ? var.volume_full_names[object.value.volume_key].string_shared_as : object.value.string_shared_as
       history_data_sharing_status = object.value.history_data_sharing_status
     }
   }

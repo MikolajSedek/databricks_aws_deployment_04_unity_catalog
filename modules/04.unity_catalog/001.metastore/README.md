@@ -16,7 +16,7 @@
 - **Key Business & Security Outcomes**:
   - **Confused-Deputy Prevention**: Enforces `sts:ExternalId = var.databricks_account_id` and self-assuming role trust via `data.databricks_aws_unity_catalog_assume_role_policy`.
   - **Least-Privilege S3 & KMS Access**: Scopes IAM permissions strictly to the designated UC root bucket and KMS CMK (`kms_name = var.kms_key_arn`) plus an explicit `aws_kms_grant`.
-  - **Centralized Metastore Governance**: Assigns `owner = var.metastore_owner` (`dbx-platform-admins`) so all platform administrators co-manage the metastore.
+  - **Centralized Metastore Governance**: Assigns `owner = var.owner_group_name` (`dbx-platform-admins`) so all platform administrators co-manage the metastore.
   - **Native Delta Sharing Readiness**: Configures `delta_sharing_scope = "INTERNAL_AND_EXTERNAL"` and token expiration governance at the metastore root.
 
 ---
@@ -27,7 +27,7 @@
 1. **IAM Trust & Permissions Generation**: Evaluates `data.databricks_aws_unity_catalog_assume_role_policy.this` (binding the Unity Catalog control plane principal `arn:aws:iam::414351767826:role/unity-catalog-prod-UCMasterRole-14S5ZJVKOTYTL` and self-assume ARN with `external_id`) and `data.databricks_aws_unity_catalog_policy.this` (scoping S3 actions and KMS key usage).
 2. **AWS IAM Role & KMS Grant Creation**: Provisions `aws_iam_role.metastore_data_access`, `aws_iam_policy.metastore_data_access`, `aws_iam_role_policy_attachment.metastore_data_access`, and `aws_kms_grant.metastore_data_access`.
 3. **Eventual Consistency Safeguard**: Waits 30 seconds via `time_sleep.wait_for_iam_propagation` after IAM policy attachment and KMS grant creation.
-4. **Metastore Creation**: Creates `databricks_metastore.this` (`provider = databricks.mws`) with `storage_root = "s3://${var.uc_root_bucket_name}/metastore-root"`, `owner = var.metastore_owner`, and Delta Sharing settings.
+4. **Metastore Creation**: Creates `databricks_metastore.this` (`provider = databricks.mws`) with `storage_root = "s3://${var.bucket_name}/metastore"`, `owner = var.owner_group_name`, and Delta Sharing settings.
 5. **Default Data Access Binding**: Creates `databricks_metastore_data_access.this` (`is_default = true`), linking the metastore to the IAM role ARN after `time_sleep` completes.
 
 ### 2.2 Short-Lived Credential Vending Flow
@@ -63,7 +63,7 @@ flowchart TD
     classDef dbxUc fill:#FCE4EC,stroke:#C2185B,stroke-width:2px,color:#880E4F;
     classDef out fill:#E8F5E9,stroke:#2E7D32,stroke-width:1.5px,color:#1B5E20;
 
-    Inputs["<img src='https://raw.githubusercontent.com/mingrammer/diagrams/master/resources/aws/general/general.png' width='28' height='28' style='width:28px;height:28px;max-width:28px;max-height:28px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>Inputs</b><br/>metastore_name, uc_root_bucket_name, kms_key_arn"]:::input
+    Inputs["<img src='https://raw.githubusercontent.com/mingrammer/diagrams/master/resources/aws/general/general.png' width='28' height='28' style='width:28px;height:28px;max-width:28px;max-height:28px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>Inputs</b><br/>metastore_name, bucket_name, kms_key_arn"]:::input
 
     subgraph AWSIAM ["AWS IAM & KMS Trust Layer"]
         AssumeDoc["<img src='https://raw.githubusercontent.com/mingrammer/diagrams/master/resources/aws/security/identity-and-access-management-iam-permissions.png' width='28' height='28' style='width:28px;height:28px;max-width:28px;max-height:28px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>data.databricks_aws_unity_catalog_assume_role_policy</b>"]
@@ -121,10 +121,11 @@ This module does not invoke external submodules.
 | `aws_region` | `string` | AWS region where the metastore is provisioned (`eu-central-1`) | Yes |
 | `aws_account_id` | `string` | 12-digit AWS Account ID (`sensitive = true`) | Yes |
 | `databricks_account_id` | `string` | Databricks Account UUID (`sensitive = true`) | Yes |
-| `uc_root_bucket_name` | `string` | Name of the S3 bucket used for the metastore root | Yes |
+| `bucket_name` | `string` | Base name of the S3 bucket used for the metastore root | Yes |
 | `kms_key_arn` | `string` | ARN of the KMS key encrypting the UC root bucket | Yes |
 | `iam_role_name` | `string` | Name of the IAM role assumed by Unity Catalog | Yes |
-| `metastore_owner` | `string` | Account-level admin group owning the metastore (`dbx-platform-admins`) | No |
+| `owner_group_name` | `string` | Account-level admin group owning the metastore (`dbx-platform-admins`) | Yes |
+| `owner` | `string` | Optional explicit owner principal override | No (`null`) |
 | `delta_sharing_scope` | `string` | Scope of Delta Sharing (`INTERNAL_AND_EXTERNAL`) | No |
 
 ### 6.2 Essential Outputs Summary

@@ -10,4 +10,9 @@
 output "catalog_names" {
   description = "Map of logical catalog keys to provisioned Unity Catalog names."
   value       = { for k, v in databricks_catalog.this : k => v.name }
+
+  depends_on = [
+    databricks_workspace_binding.this,
+    databricks_grants.this
+  ]
 }

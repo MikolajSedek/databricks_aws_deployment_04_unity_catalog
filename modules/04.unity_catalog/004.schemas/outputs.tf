@@ -16,4 +16,8 @@ output "schema_names" {
       full_name    = v.id
     }
   }
+
+  depends_on = [
+    databricks_grants.this
+  ]
 }

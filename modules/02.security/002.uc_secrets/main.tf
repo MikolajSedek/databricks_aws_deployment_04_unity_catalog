@@ -24,7 +24,6 @@ resource "databricks_secret_uc" "this" {
   name         = each.value.name
   value        = each.value.value
   comment      = each.value.comment
-  owner        = coalesce(each.value.owner, var.owner_group_name)
   expire_time  = each.value.expire_time
 }
 

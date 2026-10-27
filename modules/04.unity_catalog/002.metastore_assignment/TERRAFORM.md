@@ -31,5 +31,8 @@ No modules.
 
 ## Outputs
 
-No outputs.
+| Name | Description |
+|------|-------------|
+| <a name="output_assignment_ids"></a> [assignment\_ids](#output\_assignment\_ids) | Map of workspace ID to metastore assignment ID. |
+| <a name="output_metastore_id"></a> [metastore\_id](#output\_metastore\_id) | Regional Unity Catalog metastore ID, exposed after workspace assignments are complete. |
 <!-- END_TF_DOCS -->

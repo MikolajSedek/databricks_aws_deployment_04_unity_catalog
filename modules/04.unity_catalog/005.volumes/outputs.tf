@@ -15,4 +15,9 @@ output "volume_full_names" {
       string_shared_as = "${v.schema_name}.${v.name}"
     }
   }
+
+  depends_on = [
+    databricks_grants.volume,
+    databricks_grants.external_location
+  ]
 }

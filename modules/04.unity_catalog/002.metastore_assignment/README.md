@@ -11,11 +11,11 @@
 - **Purpose & Scope**:
   This module attaches the regional **Databricks Unity Catalog Metastore** to all existing Databricks E2 workspaces in the region (`databricks_metastore_assignment` via `for_each = var.workspace_ids`) using the account-level `databricks.mws` provider alias.
 - **Problem Statement & Solution**:
-  A Unity Catalog metastore is an account-level regional object; until it is explicitly assigned to Databricks workspaces (`data_engineering`, `data_science`, `business_analytics`), workspace compute engines cannot resolve the 3-level namespace (`catalog.schema.table`) or execute workspace-scoped Unity Catalog APIs (such as creating catalogs, schemas, volumes, or Delta Sharing shares). This module binds the metastore across all target workspaces in parallel and establishes the prerequisite synchronization point before workspace-scoped governance modules execute.
+  A Unity Catalog metastore is an account-level regional object; until it is explicitly assigned to Databricks workspaces (`data_engineering`, `data_science`, `data_analytics`), workspace compute engines cannot resolve the 3-level namespace (`catalog.schema.table`) or execute workspace-scoped Unity Catalog APIs (such as creating catalogs, schemas, volumes, or Delta Sharing shares). This module binds the metastore across all target workspaces in parallel and establishes the prerequisite synchronization point before workspace-scoped governance modules execute.
 - **Key Business & Security Outcomes**:
-  - **Unified Multi-Workspace Governance**: Connects all regional workspaces to the single regional metastore so identities, catalogs, and lineage are shared seamlessly across Data Engineering, Data Science, and Business Analytics workspaces.
+  - **Unified Multi-Workspace Governance**: Connects all regional workspaces to the single regional metastore so identities, catalogs, and lineage are shared seamlessly across Data Engineering, Data Science, and Data Analytics workspaces.
   - **Dynamic Workspace Discovery**: Accepts dynamically discovered workspace IDs (`data.databricks_mws_workspaces.all`) without hardcoding static workspace IDs in module code.
-  - **Explicit Dependency Synchronization**: Serves as the `depends_on` gate for downstream catalog, schema, volume, secret, and Delta Sharing modules.
+  - **Data-Flow Dependency Architecture**: Exports `output "metastore_id"` encapsulated with an output-level `depends_on = [databricks_metastore_assignment.this]` to downstream modules (`003.catalogs`, `005.volumes`), establishing deterministic DAG ordering without brittle module-level `depends_on` blocks.
 
 ---
 
@@ -24,12 +24,12 @@
 ### 2.1 Configuration & Provisioning Lifecycle
 1. **Dynamic Workspace Mapping**: Receives `var.workspace_ids` (a map of logical workspace keys to numeric workspace IDs discovered via `data.databricks_mws_workspaces.all` in `environments/dev`).
 2. **Account-Level Assignment**: Iterates with `for_each = var.workspace_ids` to provision `databricks_metastore_assignment.this` using `provider = databricks.mws`, setting `metastore_id = var.metastore_id`, `workspace_id = each.value`, and `default_catalog_name = var.default_catalog_name`.
-3. **Downstream Gate**: Once completed, all attached workspaces have Unity Catalog enabled and can execute workspace-level Unity Catalog API calls.
+3. **Downstream Gate**: Once completed, all attached workspaces have Unity Catalog enabled and can execute workspace-level Unity Catalog API calls. Downstream modules receive `module.metastore_assignment.metastore_id`.
 
 ### 2.2 Workspace Attachment Topology (`environments/dev`)
 - `data_engineering` (`msedek-dbx-dep-data-eng-dev` / `7474645771128190`) $\rightarrow$ Assigned to regional metastore
 - `data_science` (`msedek-dbx-dep-data-science-dev` / `7474648085645767`) $\rightarrow$ Assigned to regional metastore
-- `business_analytics` (`msedek-dbx-dep-data-analytics-dev` / `7474660556461653`) $\rightarrow$ Assigned to regional metastore
+- `data_analytics` (`msedek-dbx-dep-data-analytics-dev` / `7474660556461653`) $\rightarrow$ Assigned to regional metastore
 
 ---
 
@@ -52,6 +52,7 @@ flowchart TD
     classDef input fill:#ECEFF1,stroke:#37474F,stroke-width:2px,color:#212121;
     classDef mws fill:#FCE4EC,stroke:#C2185B,stroke-width:2px,color:#880E4F;
     classDef ws fill:#E3F2FD,stroke:#1565C0,stroke-width:1.5px,color:#0D47A1;
+    classDef out fill:#E8F5E9,stroke:#2E7D32,stroke-width:1.5px,color:#1B5E20;
 
     Inputs["<img src='https://raw.githubusercontent.com/mingrammer/diagrams/master/resources/aws/general/general.png' width='28' height='28' style='width:28px;height:28px;max-width:28px;max-height:28px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>Inputs</b><br/>metastore_id, workspace_ids, default_catalog_name"]:::input
 
@@ -60,14 +61,17 @@ flowchart TD
     subgraph Workspaces ["Existing Regional Databricks E2 Workspaces"]
         DE["<img src='https://raw.githubusercontent.com/oieduardorabelo/databricks-architecture-icons/main/icons/png/workspace.png' width='32' height='32' style='width:32px;height:32px;max-width:32px;max-height:32px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>Data Engineering Workspace</b><br/>(msedek-dbx-dep-data-eng-dev)"]
         DS["<img src='https://raw.githubusercontent.com/oieduardorabelo/databricks-architecture-icons/main/icons/png/workspace.png' width='32' height='32' style='width:32px;height:32px;max-width:32px;max-height:32px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>Data Science Workspace</b><br/>(msedek-dbx-dep-data-science-dev)"]
-        BA["<img src='https://raw.githubusercontent.com/oieduardorabelo/databricks-architecture-icons/main/icons/png/workspace.png' width='32' height='32' style='width:32px;height:32px;max-width:32px;max-height:32px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>Business Analytics Workspace</b><br/>(msedek-dbx-dep-data-analytics-dev)"]
+        DA["<img src='https://raw.githubusercontent.com/oieduardorabelo/databricks-architecture-icons/main/icons/png/workspace.png' width='32' height='32' style='width:32px;height:32px;max-width:32px;max-height:32px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>Data Analytics Workspace</b><br/>(msedek-dbx-dep-data-analytics-dev)"]
     end
     class Workspaces ws;
+
+    OutputMetastoreId["<img src='https://raw.githubusercontent.com/mingrammer/diagrams/master/resources/aws/general/general.png' width='28' height='28' style='width:28px;height:28px;max-width:28px;max-height:28px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>Output: metastore_id</b><br/>(Data-Flow Gate)"]:::out
 
     Inputs --> Assignment
     Assignment -->|"Binds Metastore"| DE
     Assignment -->|"Binds Metastore"| DS
-    Assignment -->|"Binds Metastore"| BA
+    Assignment -->|"Binds Metastore"| DA
+    Assignment --> OutputMetastoreId
 ```
 
 ---
@@ -78,8 +82,9 @@ This module does not invoke external submodules.
 
 - **Upstream Providers of Inputs**:
   - [`001.metastore`](../001.metastore) - Supplies `metastore_id`.
-- **Downstream Dependents**:
-  - [`003.catalogs`](../003.catalogs) - Waits on `module.metastore_assignment` via `depends_on` before creating catalogs and workspace bindings.
+- **Downstream Dependents (Data-Flow Direct Inputs)**:
+  - [`003.catalogs`](../003.catalogs) - Consumes `metastore_id = module.metastore_assignment.metastore_id` to ensure workspaces are attached prior to catalog and binding creation.
+  - [`005.volumes`](../005.volumes) - Consumes `metastore_id = module.metastore_assignment.metastore_id` to ensure storage credentials and external locations wait for workspace attachment.
 
 ---
 
@@ -98,7 +103,10 @@ This module does not invoke external submodules.
 
 ### 6.2 Essential Outputs Summary
 
-No outputs are exported by this module in accordance with output minimization principles.
+| Output | Type | Description | Downstream Consumer |
+|:---|:---:|:---|:---|
+| `metastore_id` | `string` | Regional Unity Catalog metastore ID, exposed only after workspace assignments complete | `003.catalogs`, `005.volumes` |
+| `assignment_ids` | `map(string)` | Map of workspace keys to metastore assignment IDs | External automation / inspection |
 
 ---
 

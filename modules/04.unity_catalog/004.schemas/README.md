@@ -11,18 +11,18 @@
 - **Purpose & Scope**:
   This module provisions second-level **Unity Catalog Schemas** (`databricks_schema`) across all governed catalogs and enforces authoritative **Schema-Level Role-Based Access Control (RBAC)** (`databricks_grants`).
 - **Problem Statement & Solution**:
-  Within a catalog, different data layers (e.g., `raw_ingestion`, `curated_silver`, `feature_store`, `model_artifacts`, `reporting_gold`, `security_vault`, `open_sharing_outbox`) require distinct access boundaries—for instance, Data Engineers write to `raw_ingestion`, whereas Data Scientists and Analysts only consume curated or shared schemas. This module provisions the complete multi-layer schema taxonomy declaratively and binds authoritative `databricks_grants` (`USE_SCHEMA`, `SELECT`, `MODIFY`, `CREATE_TABLE`, `CREATE_VOLUME`, `CREATE_FUNCTION`, `CREATE_MODEL`, `READ_VOLUME`, `WRITE_VOLUME`) per schema.
+  Within a catalog, different data layers (`raw_ingestion`, `bronze`, `silver`, `gold`, `feature_store`, `ml_artifacts`, `bi_reporting`, `security_vault`, `external_sharing`) require distinct access boundaries—for instance, Data Engineers write to `raw_ingestion` and medallion layers, whereas Data Scientists and Analysts consume curated or shared schemas. This module provisions the complete multi-layer schema taxonomy declaratively and binds authoritative `databricks_grants` (`USE_SCHEMA`, `SELECT`, `MODIFY`, `CREATE_TABLE`, `CREATE_VOLUME`, `READ_VOLUME`, `WRITE_VOLUME`) per schema.
 - **Key Business & Security Outcomes**:
-  - **Medallion & Domain Schema Taxonomy**: Establishes structured schemas for ingestion, transformation, ML feature/model storage, BI reporting, UC secret storage (`security_vault`), and Delta Sharing (`open_sharing_outbox`).
+  - **Medallion & Domain Schema Taxonomy**: Establishes 9 structured schemas across 4 catalogs for landing, bronze, silver, gold, ML feature/model storage, BI reporting, UC secret storage (`security_vault`), and Open Delta Sharing (`external_sharing`).
   - **Fine-Grained Schema RBAC**: Restricts write privileges (`MODIFY`, `CREATE_TABLE`, `WRITE_VOLUME`) to domain owners while granting read privileges (`USE_SCHEMA`, `SELECT`, `READ_VOLUME`) to downstream consumers.
-  - **Structured Downstream Contract**: Exports `schema_names` (`catalog_name`, `schema_name`, `full_name`) consumed by `005.volumes`, `002.uc_secrets`, and `006.open_sharing`.
+  - **Structured Downstream Contract**: Exports `schema_names` (`catalog_name`, `schema_name`, `full_name`) with output-level `depends_on = [databricks_grants.this]` consumed by `005.volumes`, `002.uc_secrets`, and `006.open_sharing`.
 
 ---
 
 ## 2. General Logic & Operational Flow
 
 ### 2.1 Configuration & Provisioning Lifecycle
-1. **Catalog Key Resolution**: Resolves the parent `catalog_name` from `var.catalog_names[each.value.catalog_key]`, guaranteeing catalog creation before schema creation.
+1. **Catalog Key Resolution**: Resolves the parent `catalog_name` from `var.catalog_names[each.value.catalog_key]`, guaranteeing catalog and binding creation before schema creation.
 2. **Schema Provisioning**: Creates `databricks_schema.this` with `name`, `catalog_name`, `owner`, `comment`, `properties`, and `force_destroy`.
 3. **Authoritative Grants**: Filters schemas with non-empty `grants` (`local.schemas_with_grants`) and applies `databricks_grants.this` (`schema = "${catalog_name}.${name}"`).
 
@@ -30,13 +30,15 @@
 
 | Schema Key | Full Unity Catalog Name | Purpose | Primary RBAC Grants |
 |:---|:---|:---|:---|
-| `de_raw_ingestion` | `data_engineering_dev.raw_ingestion` | Bronze landing zone for raw files, volumes, and ERP ingestion secrets | `dbx-data-engineers` (RW + Volume/Table create) |
-| `de_curated_silver` | `data_engineering_dev.curated_silver` | Cleansed and deduplicated Silver tables | `dbx-data-engineers` (RW), `dbx-data-scientists` (RO), `dbx-data-analysts` (RO) |
-| `ds_feature_store` | `data_science_dev.feature_store` | ML feature tables and feature engineering pipelines | `dbx-data-scientists` (RW + Model/Function create), `dbx-data-engineers` (RO) |
-| `ds_model_artifacts` | `data_science_dev.model_artifacts` | Model checkpoints, evaluation plots, and volume artifacts | `dbx-data-scientists` (RW + Volume create) |
-| `ba_reporting_gold` | `business_analytics_dev.reporting_gold` | Executive Gold marts and BI semantic views | `dbx-data-analysts` (RW), `dbx-data-engineers` (RW) |
-| `shared_security_vault` | `shared_enterprise_dev.security_vault` | Dedicated schema hosting native Unity Catalog secrets (`databricks_secret_uc`) | `dbx-data-engineers` (`USE_SCHEMA`), `dbx-data-scientists` (`USE_SCHEMA`) |
-| `shared_open_sharing` | `shared_enterprise_dev.open_sharing_outbox` | Outbound tables and volumes published via Open Delta Sharing | `dbx-data-engineers` (RW), `dbx-data-analysts` (RO) |
+| `de_raw_ingestion` | `data_engineering_dev.raw_ingestion` | Raw landing zone for external feeds, Auto Loader volumes, and ingestion secrets | `dbx-data-engineers` (RW + Volume/Table create) |
+| `de_bronze` | `data_engineering_dev.bronze` | Bronze medallion layer storing raw historical Delta tables | `dbx-data-engineers` (RW + Table create) |
+| `de_silver` | `data_engineering_dev.silver` | Silver medallion layer storing cleansed, conformed, and deduplicated datasets | `dbx-data-engineers` (RW), `dbx-data-scientists` (RO), `dbx-data-analysts` (RO) |
+| `de_gold` | `data_engineering_dev.gold` | Curated Gold business aggregates and dimensional tables | `dbx-data-engineers` (RW), `dbx-data-analysts` (RO), `dbx-data-scientists` (RO) |
+| `ds_ml_artifacts` | `data_science_dev.ml_artifacts` | Schema hosting model training artifacts, checkpoints, and unmanaged datasets | `dbx-data-scientists` (RW + Volume create) |
+| `ds_feature_store` | `data_science_dev.feature_store` | Curated feature tables and feature engineering pipelines | `dbx-data-scientists` (RW), `dbx-data-engineers` (RO) |
+| `da_bi_reporting` | `data_analytics_dev.bi_reporting` | Curated reporting tables, KPIs, and exports for BI dashboards | `dbx-data-analysts` (RW), `dbx-data-engineers` (RW) |
+| `shared_external_sharing` | `shared_enterprise_dev.external_sharing` | Curated schema dedicated to Open Delta Sharing products | `dbx-data-engineers` (RW), `dbx-data-analysts` (RO) |
+| `shared_security_vault` | `shared_enterprise_dev.security_vault` | Centralized schema for governed Unity Catalog secrets (`databricks_secret_uc`) | `dbx-platform-admins` (`ALL_PRIVILEGES`), `dbx-data-engineers` (`USE_SCHEMA`), `dbx-data-scientists` (`USE_SCHEMA`) |
 
 ---
 
@@ -68,11 +70,12 @@ flowchart TD
 
     Grants["<img src='https://raw.githubusercontent.com/oieduardorabelo/databricks-architecture-icons/main/icons/png/enterprise-security.png' width='32' height='32' style='width:32px;height:32px;max-width:32px;max-height:32px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>databricks_grants.this</b><br/>(Authoritative Schema RBAC)"]:::grant
 
-    OutputSchemas["<img src='https://raw.githubusercontent.com/mingrammer/diagrams/master/resources/aws/general/general.png' width='28' height='28' style='width:28px;height:28px;max-width:28px;max-height:28px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>Output: schema_names</b><br/>(catalog_name, schema_name, full_name)"]:::out
+    OutputSchemas["<img src='https://raw.githubusercontent.com/mingrammer/diagrams/master/resources/aws/general/general.png' width='28' height='28' style='width:28px;height:28px;max-width:28px;max-height:28px;display:block;margin:0 auto;object-fit:contain;' /><br/><b>Output: schema_names</b><br/>(depends_on: grants)"]:::out
 
     Inputs --> Schema
     Schema --> Grants
     Schema --> OutputSchemas
+    Grants --> OutputSchemas
 ```
 
 ---
@@ -82,7 +85,7 @@ flowchart TD
 This module does not invoke external submodules.
 
 - **Upstream Providers of Inputs**:
-  - [`003.catalogs`](../003.catalogs) - Supplies `catalog_names`.
+  - [`003.catalogs`](../003.catalogs) - Supplies `catalog_names` with output-level dependencies ensuring catalogs and bindings exist.
 - **Consumers**:
   - [`005.volumes`](../005.volumes) - Consumes `schema_names` to place managed and external volumes inside target schemas.
   - [`002.uc_secrets`](../../02.security/002.uc_secrets) - Consumes `schema_names` to place native Unity Catalog secrets inside target schemas.
@@ -107,7 +110,7 @@ This module does not invoke external submodules.
 
 | Output | Type | Description | Downstream Consumer |
 |:---|:---:|:---|:---|
-| `schema_names` | `map(object)` | Map of schema keys to `{catalog_name, schema_name, full_name}` | `005.volumes`, `002.uc_secrets`, `006.open_sharing` |
+| `schema_names` | `map(object)` | Map of schema keys to `{catalog_name, schema_name, full_name}` (with output-level `depends_on = [databricks_grants.this]`) | `005.volumes`, `002.uc_secrets`, `006.open_sharing` |
 
 ---
 

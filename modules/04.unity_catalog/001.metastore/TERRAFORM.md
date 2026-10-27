@@ -49,6 +49,7 @@ No modules.
 | <a name="input_iam_role_name"></a> [iam\_role\_name](#input\_iam\_role\_name) | Name of the AWS IAM role assumed by Databricks Unity Catalog for metastore storage access. | `string` | n/a | yes |
 | <a name="input_kms_key_arn"></a> [kms\_key\_arn](#input\_kms\_key\_arn) | Customer-managed KMS key ARN encrypting the Unity Catalog S3 root bucket. | `string` | n/a | yes |
 | <a name="input_metastore_name"></a> [metastore\_name](#input\_metastore\_name) | Name of the Unity Catalog metastore (one metastore per AWS region per account). | `string` | n/a | yes |
+| <a name="input_owner"></a> [owner](#input\_owner) | Explicit owner of the Unity Catalog metastore (defaults to owner\_group\_name). | `string` | `null` | no |
 | <a name="input_owner_group_name"></a> [owner\_group\_name](#input\_owner\_group\_name) | Account-level group display name assigned as owner of the Unity Catalog metastore (e.g. dbx-platform-admins). | `string` | n/a | yes |
 | <a name="input_tags"></a> [tags](#input\_tags) | Resource tags to apply to the AWS IAM role and policy. | `map(string)` | `{}` | no |
 

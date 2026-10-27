@@ -1,7 +1,7 @@
 # AI Assistant Governance & Knowledge Framework (`.ai`)
 
 [![Documentation](https://img.shields.io/badge/Documentation-Authoritative_Standard-0052CC?logo=markdown)](file:///.ai/instructions.md)
-[![MCP](https://img.shields.io/badge/Model_Context_Protocol-Integrated-6B46C1?logo=anthropic)](https://modelcontextprotocol.io/)\
+[![MCP](https://img.shields.io/badge/Model_Context_Protocol-Integrated-6B46C1?logo=anthropic)](https://modelcontextprotocol.io/)
 [![Mermaid](https://img.shields.io/badge/Diagrams-Mermaid_Validated-FF3621?logo=mermaid)](https://mermaid.js.org/)
 [![Terraform](https://img.shields.io/badge/Terraform-%3E%3D1.5.0-623CE4?logo=terraform)](https://developer.hashicorp.com/terraform/docs)
 
@@ -10,13 +10,14 @@
 ## 1. Executive Summary
 
 - **Purpose & Scope**:
-  The `.ai/` directory houses the authoritative architectural guidelines, Model Context Protocol (MCP) integrations, system prompt instructions, vendored skills, and standardized documentation templates governing all AI-assisted engineering and human development across the **Databricks on AWS Multi-Workspace & Compute Management** (`03_workspaces_and_compute_management`) repository.
+  The `.ai/` directory houses the authoritative architectural guidelines, Model Context Protocol (MCP) integrations, system prompt instructions, vendored skills, and standardized documentation templates governing all AI-assisted engineering and human development across the **Databricks Unity Catalog Governance Deployment on AWS** (`04_unity_catalog`) repository.
 - **Problem Statement & Solution**:
-  AI assistants operating without centralized project guardrails often introduce architectural drift, hallucinated resource attributes, deprecated Terraform provider syntax, or fragmented documentation formats. The `.ai/` framework eliminates this variability by enforcing deterministic sources of truth, live MCP documentation retrieval, standardized C4 architecture visualisations with official AWS and Databricks vector icons, and strict pre-commit quality gates.
+  AI assistants operating without centralized project guardrails often introduce architectural drift, hallucinated resource attributes, deprecated Terraform provider syntax, brittle cross-module dependencies, or fragmented documentation formats. The `.ai/` framework eliminates this variability by enforcing deterministic sources of truth, live MCP documentation retrieval, standardized C4 architecture visualisations with official AWS and Databricks vector icons, strict pre-commit quality gates, and a mandated data-flow dependency architecture.
 - **Key Governance & Operational Outcomes**:
-  - **Authoritative Source Hierarchy**: Grounds all multi-workspace and compute designs in official Databricks and AWS reference architectures, preventing hallucinations.
+  - **Authoritative Source Hierarchy**: Grounds all Unity Catalog, S3 storage, KMS encryption, and IAM trust designs in official Databricks and AWS reference architectures, preventing hallucinations.
   - **Tool-Assisted Verification (MCP)**: Equips AI agents with live MCP servers (`aws-docs` and `terraform`) to query current AWS API limits, IAM policy requirements, and Terraform registry schema definitions.
   - **Standardized Documentation Contract**: Mandates a strict separation between consumer-facing architectural narrative ([`README.md`](../README.md)) and auto-generated machine interfaces (`TERRAFORM.md`).
+  - **Data-Flow Dependency Mandate**: Strictly enforces Section 6.H prohibiting module-level `depends_on = [module.<name>]` in favor of fine-grained output-level and input-variable data flow.
   - **Zero-Error Diagrams**: Enforces programmatic syntax validation on all Mermaid diagrams with the anti-flattening icon embedding protocol before documentation commits.
 
 ---
@@ -29,7 +30,7 @@
 2. **Authoritative Grounding & MCP Query**:
    When drafting or modifying Terraform resources, the assistant queries configured MCP servers defined in [`mcp/mcp.json`](./mcp/mcp.json) (`aws-docs` for AWS specifications and `terraform` for resource arguments) and vendored skills under [`.ai/skills/`](./skills/) rather than relying on stale model memory.
 3. **Execution & Modular Design**:
-   Code changes adhere to the decoupled modular topology under `modules/` (functional numbering `01.networking/001`, `02.security/001-002`, `03.storage/001-002`, `04.workspaces/001`, `05.compute/001-004`) and orchestrated environments under `environments/dev/`.
+   Code changes adhere to the decoupled modular topology under `modules/` (functional numbering `02.security/001-002`, `03.storage/001-002`, `04.unity_catalog/001-006`) and orchestrated environments under `environments/dev/`.
 4. **Documentation & Validation Gate**:
    Any new or modified component must include a `README.md` following [`README_TEMPLATE.md`](./README_TEMPLATE.md). Mermaid diagrams must be tested against the live parser engine (`mmdc`), and all URLs must be verified for HTTP 200 availability.
 
@@ -51,7 +52,7 @@ The repository integrates standard Model Context Protocol servers to provide rea
 ├── README_TEMPLATE.md      # Authoritative structural template for all README.md files
 ├── mcp/
 │   └── mcp.json            # Model Context Protocol server configuration
-└── skills/                 # Vendored operational skills (workspace provisioning, docs)
+└── skills/                 # Vendored operational skills (Unity Catalog, workspaces, docs)
 ```
 
 | File / Directory | Target Audience | Primary Function / Scope |
@@ -63,8 +64,8 @@ The repository integrates standard Model Context Protocol servers to provide rea
 
 ### 3.2 Authoritative Source Hierarchy
 When resolving architectural or configuration questions, AI assistants and engineers must prioritize sources in the following strict order:
-1. **Databricks AWS Workspace Provisioning Guide & Skill**: Primary pattern reference for E2 multi-workspace deployments and provider decoupling.
-2. **Databricks on AWS Official Documentation**: Primary source of truth for workspace, compute plane, cluster policies, and storage configurations.
+1. **Databricks AWS Unity Catalog Skill & Guides**: Primary pattern reference for regional metastores, storage credentials, external locations, and 3-level namespace RBAC.
+2. **Databricks on AWS Official Documentation**: Primary source of truth for workspace, compute plane, Delta Sharing, and storage configurations.
 3. **AWS Documentation & Well-Architected Framework (via `aws-docs` MCP)**: Official guidance for IAM roles, KMS policies, S3 encryption, and VPC integration.
 4. **Terraform AWS & Databricks Provider Registries (via `terraform` MCP)**: Canonical schema, arguments, and type constraints.
 
@@ -73,7 +74,6 @@ When resolving architectural or configuration questions, AI assistants and engin
 ## 4. Architecture C4 Visualisation
 
 ### 4.1 Level 1: System Context Diagram
-Illustrates how the AI governance layer interfaces between engineers, AI assistants, live documentation MCP servers, and the repository code.
 
 ```mermaid
 flowchart TD
@@ -102,7 +102,6 @@ flowchart TD
 ```
 
 ### 4.2 Level 2: Quality & Validation Pipeline Diagram
-Shows the automated checks that validate code, documentation, links, and diagrams created under this framework.
 
 ```mermaid
 flowchart LR
@@ -138,82 +137,14 @@ flowchart LR
 
 ---
 
-## 5. Components & Assets Inventory
+## 5. Important Links and Resources
 
-### 5.1 Document Inventory
+### 5.1 Authoritative Documentation
+- [Model Context Protocol Specification](https://modelcontextprotocol.io/) - Official MCP documentation.
+- [Mermaid CLI (`@mermaid-js/mermaid-cli`)](https://github.com/mermaid-js/mermaid-cli) - Mermaid CLI documentation.
+- [Databricks Unity Catalog Documentation](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) - Official Databricks Unity Catalog documentation.
 
-| Component | Path | Description | Key Enforcements |
-|:---|:---|:---|:---|
-| **System Instructions** | [`instructions.md`](./instructions.md) | Master instruction prompt for AI agents | Source of truth hierarchy, MCP usage rules, security posture, Mermaid icon anti-flattening syntax rules. |
-| **README Template** | [`README_TEMPLATE.md`](./README_TEMPLATE.md) | Standardized markdown template | 7 mandatory sections, C4 diagrams, icon CDN catalogs, interface table links. |
-| **MCP Configuration** | [`mcp/mcp.json`](./mcp/mcp.json) | MCP tool launch definitions | `aws-docs` via `uvx` and `terraform` via `npx`. |
-
-### 5.2 Mermaid Syntax Compliance Standards
-To prevent syntax errors across markdown viewers, all Mermaid blocks must satisfy:
-- **Subgraph Styling**: Never use `subgraph Id[...]:::className`. Always define `subgraph Id ["Title"]` and apply styles using `class Id className;` after the block.
-- **Label Enclosure**: Always enclose node labels containing brackets, parentheses, colons, or slashes in double quotes (`["Label"]`).
-- **Icon Tag Formatting**: Use the mandatory anti-flattening template with single-quoted attributes inside the double-quoted node label string.
-
----
-
-## 6. Operating Guide & Developer Interface
-
-### 6.1 Validating Mermaid Diagrams
-To validate all Mermaid diagrams across the repository using `@mermaid-js/mermaid-cli`:
-
-```bash
-# Validate a single markdown document
-npx -y @mermaid-js/mermaid-cli -i path/to/README.md -o /tmp/output.md
-```
-
-### 6.2 Generating Terraform Interface Contracts
-`TERRAFORM.md` files are maintained via `terraform-docs` and executed automatically via pre-commit hooks:
-
-```bash
-# Generate TERRAFORM.md for all modules and environments
-terraform-docs markdown table --output-file TERRAFORM.md ./modules/04.workspaces/001.generic_workspace
-terraform-docs markdown table --output-file TERRAFORM.md ./environments/dev
-```
-
-### 6.3 Using MCP Servers with AI Assistants
-Ensure Python (`uv` / `uvx`) and Node.js (`npx`) are installed to run the configured MCP servers:
-```json
-{
-  "mcpServers": {
-    "aws-docs": {
-      "command": "uvx",
-      "args": ["awslabs.aws-documentation-mcp-server@latest"]
-    },
-    "terraform": {
-      "command": "npx",
-      "args": ["-y", "terraform-mcp-server"]
-    }
-  }
-}
-```
-
----
-
-## 7. Important Links and Resources
-
-### 7.1 Authoritative Reference Architectures
-- [Official Databricks GitHub Repositories](https://github.com/orgs/databricks/repositories?type=all) - Authoritative catalog of official Databricks open-source repositories, reference implementations, and tooling.
-- [Databricks Terraform Provider Examples](https://github.com/databricks/terraform-databricks-examples) - Examples of using Databricks Terraform provider (when deploying with AWS, use only AWS examples).
-- [Databricks on AWS Official Documentation](https://docs.databricks.com/aws/en/) - Core portal for Databricks cloud infrastructure.
-- [Databricks AWS Workspace Terraform Guide](https://registry.terraform.io/providers/databricks/databricks/latest/docs/guides/aws-workspace) - Step-by-step guide for deploying Databricks E2 workspaces.
-- [Databricks AWS PrivateLink Workspace Guide](https://registry.terraform.io/providers/databricks/databricks/latest/docs/guides/aws-private-link-workspace) - Authoritative Terraform guide for Databricks AWS PrivateLink workspaces and VPC endpoint registration.
-- [Databricks Classic Private Connectivity Documentation](https://docs.databricks.com/aws/en/security/network/classic/privatelink) - Official reference for configuring classic compute plane private connectivity to Databricks control plane services.
-- [AWS Well-Architected Framework](https://aws.amazon.com/architecture/well-architected/) - Architectural pillars and security guidelines.
-
-### 7.2 Tooling & Protocol Standards
-- [Model Context Protocol (MCP) Documentation](https://modelcontextprotocol.io/) - Open standard for connecting AI models to tools and knowledge sources.
-- [Mermaid.js Official Documentation](https://mermaid.js.org/) - Syntax and diagram generation specifications.
-- [terraform-docs Documentation](https://terraform-docs.io/) - Automated interface documentation generation tool.
-- [Terraform AWS Provider Documentation](https://registry.terraform.io/providers/hashicorp/aws/latest/docs) - HashiCorp AWS provider registry.
-- [Terraform Databricks Provider Documentation](https://registry.terraform.io/providers/databricks/databricks/latest/docs) - Databricks provider registry.
-
-### 7.3 Internal Repository Links
-- [Root Repository Overview](../README.md)
-- [Project Instructions & Source of Truth](./instructions.md)
-- [Authoritative README Template](./README_TEMPLATE.md)
-- [Dev Environment Documentation](../environments/dev/README.md)
+### 5.2 Internal References
+- [System Prompt Instructions (`.ai/instructions.md`)](./instructions.md)
+- [README Template (`.ai/README_TEMPLATE.md`)](./README_TEMPLATE.md)
+- [Root Project Documentation (`README.md`)](../README.md)
