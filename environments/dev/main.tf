@@ -181,7 +181,8 @@ module "open_sharing" {
     databricks = databricks.workspace
   }
 
-  owner_group_name = local.admin_group_name
-  shares           = local.open_sharing_shares
-  recipients       = local.open_sharing_recipients
+  owner_group_name  = local.admin_group_name
+  volume_full_names = module.volumes.volume_full_names
+  shares            = local.open_sharing_shares
+  recipients        = local.open_sharing_recipients
 }
