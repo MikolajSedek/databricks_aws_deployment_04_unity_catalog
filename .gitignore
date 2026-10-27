@@ -1,0 +1,23 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+environments/dev/terraform.tfvars
+.terraform.lock.hcl
+
+# TFLint
+.tflint.d/
+
+# IDE
+.idea/
+.vscode/
