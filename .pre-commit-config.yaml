@@ -1,0 +1,57 @@
+repos:
+  # General hygiene and AWS credentials detection
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: detect-aws-credentials
+        args: ["--allow-missing-credentials"]
+
+  # Secret scanning
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+
+  # Terraform & Databricks linting, validation, docs, and security
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.96.2
+    hooks:
+      - id: terraform_fmt
+
+      # Validate Terraform in modules subdirectories
+      # Modules declaring configuration_aliases cannot be validated standalone as root modules
+      # and are validated within environments/
+      - id: terraform_validate
+        name: terraform_validate (modules)
+        files: ^modules/
+        exclude: ^modules/04\.unity_catalog/(001\.metastore|002\.metastore_assignment)/
+        args:
+          - --tf-init-args=-backend=false
+          - --hook-config=--retry-once-with-cleanup=true
+
+      # Validate Terraform in environments subdirectories
+      - id: terraform_validate
+        name: terraform_validate (environments)
+        files: ^environments/
+        args:
+          - --tf-init-args=-backend=false
+          - --hook-config=--retry-once-with-cleanup=true
+
+      - id: terraform_tflint
+        args:
+          - --args=--config=__GIT_WORKING_DIR__/.tflint.hcl
+          - --args=--recursive
+
+      - id: terraform_trivy
+        args:
+          - --args=--severity=HIGH,CRITICAL
+          - --args=--ignorefile=__GIT_WORKING_DIR__/.trivyignore
+
+      - id: terraform_docs
+        args:
+          - --hook-config=--path-to-file=TERRAFORM.md;--add-to-existing-file=true;--create-file-if-not-exist=true

@@ -1,0 +1,98 @@
+name: Pre-commit Quality & Security Checks
+
+on:
+  workflow_call:
+    inputs:
+      terraform_version:
+        description: 'Terraform version'
+        type: string
+        required: false
+        default: '1.16.3'
+      tflint_version:
+        description: 'TFLint version'
+        type: string
+        required: false
+        default: 'latest'
+      trivy_version:
+        description: 'Trivy version'
+        type: string
+        required: false
+        default: 'latest'
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+
+jobs:
+  precommit:
+    name: Pre-commit Quality & Security Checks
+    runs-on: ubuntu-latest
+    env:
+      TF_VERSION: ${{ inputs.terraform_version }}
+      TFLINT_VERSION: ${{ inputs.tflint_version }}
+      TRIVY_VERSION: ${{ inputs.trivy_version }}
+      SKIP: 'terraform_docs,terraform-docs'
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      # Setup uv using official Astral GitHub plugin
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: 'uv.lock'
+
+      # Setup Terraform using official HashiCorp GitHub plugin
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      # Setup TFLint using official GitHub plugin
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v6
+        with:
+          tflint_version: ${{ env.TFLINT_VERSION }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Cache TFLint Plugins (~/.tflint.d/plugins)
+      - name: Cache TFLint Plugins
+        uses: actions/cache@v6
+        with:
+          path: ~/.tflint.d/plugins
+          key: tflint-${{ runner.os }}-${{ hashFiles('.tflint.hcl') }}
+          restore-keys: |
+            tflint-${{ runner.os }}-
+
+      - name: Initialize TFLint Plugins
+        run: tflint --init --config .tflint.hcl
+
+      # Setup Trivy using Aqua Security GitHub plugin
+      - name: Setup Trivy
+        uses: aquasecurity/setup-trivy@v0.3.1
+        with:
+          version: ${{ env.TRIVY_VERSION }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Cache Pre-commit Hook Environments (~/.cache/pre-commit)
+      - name: Cache Pre-commit Environments
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: |
+            pre-commit-${{ runner.os }}-
+
+      # Install project dependencies (pre-commit) via uv
+      - name: Install dependencies with uv
+        run: uv sync --frozen
+
+      # Run pre-commit via uv with explicit SKIPs
+      - name: Run Pre-commit Hooks with skips
+        run: |
+          uv run pre-commit run --all-files
+        env:
+          SKIP: 'terraform_docs,terraform_trivy'

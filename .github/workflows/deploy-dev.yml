@@ -1,0 +1,61 @@
+name: Deploy Dev Environment
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      auto_apply:
+        description: 'Auto-apply after plan approval (if GitHub Environment protection rules allow)'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+
+jobs:
+  # ============================================================================
+  # STEP 0: PRE-COMMIT CHECKS
+  # Runs code formatting, linting (tflint), secret scanning (gitleaks), and security scanning (trivy).
+  # ============================================================================
+  precommit:
+    name: Pre-commit Quality & Security Checks
+    uses: ./.github/workflows/dpl-01-precommit.yml
+    secrets: inherit
+
+  # ============================================================================
+  # STEP 1: TERRAFORM VALIDATE & PLAN
+  # Validates configuration and generates speculative execution plan.
+  # ============================================================================
+  plan:
+    name: Terraform Validate & Plan
+    needs: [ precommit ]
+    uses: ./.github/workflows/dpl-02-plan.yml
+    secrets: inherit
+    with:
+      working_directory: 'environments/dev'
+      environment: 'dev'
+      plan_artifact_name: 'dev-tfplan'
+
+  # ============================================================================
+  # STEP 2: TERRAFORM APPLY
+  # Applies the binary execution plan under environment protection rules on main branch
+  # or when explicitly authorized via workflow_dispatch with auto_apply=true.
+  # ============================================================================
+  apply:
+    name: Terraform Apply
+    needs: [ plan ]
+    if: github.ref == 'refs/heads/main' && (github.event_name != 'workflow_dispatch' || inputs.auto_apply == true)
+    uses: ./.github/workflows/dpl-03-apply.yml
+    secrets: inherit
+    with:
+      working_directory: 'environments/dev'
+      environment: 'dev'
+      plan_artifact_name: 'dev-tfplan'

@@ -1,0 +1,7 @@
+interface:
+  display_name: "Databricks AWS Workspace"
+  short_description: "Architect, provision, configure, and manage Databricks Workspaces on AWS using Terraform."
+  icon_small: "./assets/databricks.svg"
+  icon_large: "./assets/databricks.png"
+  brand_color: "#FF3621"
+  default_prompt: "Use $databricks-aws-workspace to design, provision, configure, and manage Databricks E2 workspaces on AWS using Terraform."

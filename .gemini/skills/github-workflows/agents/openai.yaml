@@ -1,0 +1,7 @@
+interface:
+  display_name: "GitHub Workflows"
+  short_description: "Architect, build, secure, and maintain enterprise GitHub Actions CI/CD workflows for Terraform, AWS, and Databricks."
+  icon_small: "./assets/github.svg"
+  icon_large: "./assets/github.svg"
+  brand_color: "#2088FF"
+  default_prompt: "Use $github-workflows to architect, author, validate, and optimize production GitHub Actions CI/CD workflows for cloud infrastructure."
